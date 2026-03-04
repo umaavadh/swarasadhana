@@ -1,5 +1,5 @@
 import { Music2, Mic, Target, Activity, Play, Square, Volume2, VolumeX } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 const MusicalNotesWave = () => {
   return (
@@ -125,6 +125,21 @@ const thaaatPresets: { [key: string]: string[] } = {
   'Bhairavi Thaat': ['S', 'R1', 'G1', 'M1', 'P', 'D1', 'N1'],
 };
 
+const tanpuraAudio: { [key: string]: string } = {
+  "C":  "/audio/tanpura-C.mp3",
+  "C#": "/audio/tanpura-Cs.mp3",
+  "D":  "/audio/tanpura-D.mp3",
+  "D#": "/audio/tanpura-Ds.mp3",
+  "E":  "/audio/tanpura-E.mp3",
+  "F":  "/audio/tanpura-F.mp3",
+  "F#": "/audio/tanpura-Fs.mp3",
+  "G":  "/audio/tanpura-G.mp3",
+  "G#": "/audio/tanpura-Gs.mp3",
+  "A":  "/audio/tanpura-A.mp3",
+  "A#": "/audio/tanpura-As.mp3",
+  "B":  "/audio/tanpura-B.mp3"
+};
+
 function App() {
   const [selectedScale, setSelectedScale] = useState('C');
   const [selectedNotes, setSelectedNotes] = useState<Set<string>>(new Set());
@@ -132,6 +147,8 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(70);
   const scales = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const toggleNote = (swara: string) => {
     const newSelected = new Set(selectedNotes);
@@ -159,8 +176,52 @@ function App() {
   };
 
   const togglePlayback = () => {
-    setIsPlaying(!isPlaying);
+    if (!isPlaying) {
+      // Start playing
+      const scale = selectedScale || 'C';
+      const audioSrc = tanpuraAudio[scale];
+
+      if (!audioRef.current) {
+        audioRef.current = new Audio(audioSrc);
+        audioRef.current.loop = true;
+        audioRef.current.volume = volume / 100;
+      } else {
+        audioRef.current.src = audioSrc;
+        audioRef.current.volume = volume / 100;
+      }
+
+      audioRef.current.play().catch(err => {
+        console.error('Error playing audio:', err);
+      });
+      setIsPlaying(true);
+    } else {
+      // Stop playing
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+      setIsPlaying(false);
+    }
   };
+
+  // Update volume when slider changes
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = volume / 100;
+    }
+  }, [volume]);
+
+  // Update audio source when scale changes while playing
+  useEffect(() => {
+    if (isPlaying && audioRef.current) {
+      const scale = selectedScale || 'C';
+      const audioSrc = tanpuraAudio[scale];
+      audioRef.current.src = audioSrc;
+      audioRef.current.play().catch(err => {
+        console.error('Error playing audio:', err);
+      });
+    }
+  }, [selectedScale, isPlaying]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-amber-50 to-orange-100">
