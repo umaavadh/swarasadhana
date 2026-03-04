@@ -70,4 +70,17 @@
   .animate-fade-in-delay-4 {
     animation: fade-in 0.8s ease-out 0.8s backwards;
   }
+
+  @keyframes pulse-glow {
+    0%, 100% {
+      box-shadow: 0 0 20px rgba(249, 115, 22, 0.4), 0 0 40px rgba(251, 146, 60, 0.3);
+    }
+    50% {
+      box-shadow: 0 0 30px rgba(249, 115, 22, 0.6), 0 0 60px rgba(251, 146, 60, 0.5);
+    }
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
 }

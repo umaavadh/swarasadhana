@@ -1,4 +1,4 @@
-import { Music2, Mic, Target, Activity } from 'lucide-react';
+import { Music2, Mic, Target, Activity, Play, Square, Volume2, VolumeX } from 'lucide-react';
 import { useState } from 'react';
 
 const MusicalNotesWave = () => {
@@ -129,6 +129,8 @@ function App() {
   const [selectedScale, setSelectedScale] = useState('C');
   const [selectedNotes, setSelectedNotes] = useState<Set<string>>(new Set());
   const [selectedPreset, setSelectedPreset] = useState('None');
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [volume, setVolume] = useState(70);
   const scales = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
   const toggleNote = (swara: string) => {
@@ -154,6 +156,10 @@ function App() {
     } else {
       setSelectedNotes(new Set(thaaatPresets[presetName]));
     }
+  };
+
+  const togglePlayback = () => {
+    setIsPlaying(!isPlaying);
   };
 
   return (
@@ -304,6 +310,88 @@ function App() {
                 <span className="font-semibold text-orange-700">Common ranges:</span>
                 {' '}Male voice: C, C#, D • Female voice: G, G#, A
               </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Player Section */}
+      <section className="relative py-16">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-white rounded-2xl shadow-xl p-8 sm:p-12 border border-orange-100">
+            {/* Play/Stop Button */}
+            <div className="flex flex-col items-center mb-10">
+              <button
+                onClick={togglePlayback}
+                className={`
+                  relative w-28 h-28 rounded-full
+                  transition-all duration-300 transform hover:scale-105
+                  focus:outline-none focus:ring-4 focus:ring-orange-300
+                  ${
+                    isPlaying
+                      ? 'bg-gradient-to-br from-orange-500 to-amber-600 shadow-2xl animate-pulse-glow'
+                      : 'bg-gradient-to-br from-orange-400 to-amber-500 shadow-xl hover:shadow-2xl'
+                  }
+                `}
+              >
+                <div className="absolute inset-0 flex items-center justify-center">
+                  {isPlaying ? (
+                    <Square className="w-12 h-12 text-white fill-white" />
+                  ) : (
+                    <Play className="w-12 h-12 text-white fill-white ml-1" />
+                  )}
+                </div>
+                {isPlaying && (
+                  <>
+                    <div className="absolute inset-0 rounded-full bg-orange-400 opacity-50 animate-ping"></div>
+                    <div className="absolute inset-0 rounded-full bg-orange-300 opacity-30 animate-pulse"></div>
+                  </>
+                )}
+              </button>
+              <p className="mt-6 text-lg font-semibold text-gray-700">
+                {isPlaying ? 'Tanpura Playing' : 'Start Tanpura'}
+              </p>
+            </div>
+
+            {/* Volume Slider */}
+            <div className="space-y-3">
+              <label className="block text-center text-sm font-semibold text-gray-700">
+                Volume
+              </label>
+              <div className="flex items-center gap-4">
+                <VolumeX className="w-5 h-5 text-gray-500 flex-shrink-0" />
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={volume}
+                  onChange={(e) => setVolume(Number(e.target.value))}
+                  className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500
+                    [&::-webkit-slider-thumb]:appearance-none
+                    [&::-webkit-slider-thumb]:w-5
+                    [&::-webkit-slider-thumb]:h-5
+                    [&::-webkit-slider-thumb]:rounded-full
+                    [&::-webkit-slider-thumb]:bg-gradient-to-br
+                    [&::-webkit-slider-thumb]:from-orange-500
+                    [&::-webkit-slider-thumb]:to-amber-600
+                    [&::-webkit-slider-thumb]:shadow-lg
+                    [&::-webkit-slider-thumb]:cursor-pointer
+                    [&::-webkit-slider-thumb]:transition-transform
+                    [&::-webkit-slider-thumb]:hover:scale-110
+                    [&::-moz-range-thumb]:w-5
+                    [&::-moz-range-thumb]:h-5
+                    [&::-moz-range-thumb]:rounded-full
+                    [&::-moz-range-thumb]:bg-gradient-to-br
+                    [&::-moz-range-thumb]:from-orange-500
+                    [&::-moz-range-thumb]:to-amber-600
+                    [&::-moz-range-thumb]:border-0
+                    [&::-moz-range-thumb]:shadow-lg
+                    [&::-moz-range-thumb]:cursor-pointer
+                  "
+                />
+                <Volume2 className="w-5 h-5 text-gray-700 flex-shrink-0" />
+              </div>
+              <p className="text-center text-sm text-gray-600">{volume}%</p>
             </div>
           </div>
         </div>
