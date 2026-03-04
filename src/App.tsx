@@ -316,50 +316,52 @@ function App() {
       </section>
 
       {/* Player Section */}
-      <section className="relative py-16">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="bg-white rounded-2xl shadow-xl p-8 sm:p-12 border border-orange-100">
-            {/* Play/Stop Button */}
-            <div className="flex flex-col items-center mb-10">
-              <button
-                onClick={togglePlayback}
-                className={`
-                  relative w-28 h-28 rounded-full
-                  transition-all duration-300 transform hover:scale-105
-                  focus:outline-none focus:ring-4 focus:ring-orange-300
-                  ${
-                    isPlaying
-                      ? 'bg-gradient-to-br from-orange-500 to-amber-600 shadow-2xl animate-pulse-glow'
-                      : 'bg-gradient-to-br from-orange-400 to-amber-500 shadow-xl hover:shadow-2xl'
-                  }
-                `}
-              >
-                <div className="absolute inset-0 flex items-center justify-center">
-                  {isPlaying ? (
-                    <Square className="w-12 h-12 text-white fill-white" />
-                  ) : (
-                    <Play className="w-12 h-12 text-white fill-white ml-1" />
-                  )}
-                </div>
-                {isPlaying && (
-                  <>
-                    <div className="absolute inset-0 rounded-full bg-orange-400 opacity-50 animate-ping"></div>
-                    <div className="absolute inset-0 rounded-full bg-orange-300 opacity-30 animate-pulse"></div>
-                  </>
-                )}
-              </button>
-              <p className="mt-6 text-lg font-semibold text-gray-700">
-                {isPlaying ? 'Tanpura Playing' : 'Start Tanpura'}
-              </p>
-            </div>
-
-            {/* Volume Slider */}
-            <div className="space-y-3">
-              <label className="block text-center text-sm font-semibold text-gray-700">
-                Volume
-              </label>
+      <section className="relative py-8">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl shadow-lg p-6 border border-orange-200">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
+              {/* Play/Stop Button */}
               <div className="flex items-center gap-4">
-                <VolumeX className="w-5 h-5 text-gray-500 flex-shrink-0" />
+                <button
+                  onClick={togglePlayback}
+                  className={`
+                    relative w-20 h-20 rounded-full
+                    transition-all duration-300 transform hover:scale-105
+                    focus:outline-none focus:ring-4 focus:ring-orange-300
+                    ${
+                      isPlaying
+                        ? 'bg-gradient-to-br from-orange-500 to-amber-600 shadow-2xl animate-pulse-glow'
+                        : 'bg-gradient-to-br from-orange-400 to-amber-500 shadow-xl hover:shadow-2xl'
+                    }
+                  `}
+                >
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    {isPlaying ? (
+                      <Square className="w-9 h-9 text-white fill-white" />
+                    ) : (
+                      <Play className="w-9 h-9 text-white fill-white ml-1" />
+                    )}
+                  </div>
+                  {isPlaying && (
+                    <>
+                      <div className="absolute inset-0 rounded-full bg-orange-400 opacity-50 animate-ping"></div>
+                      <div className="absolute inset-0 rounded-full bg-orange-300 opacity-30 animate-pulse"></div>
+                    </>
+                  )}
+                </button>
+                <div>
+                  <p className="text-lg font-semibold text-gray-800">
+                    {isPlaying ? 'Tanpura Playing' : 'Tanpura'}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {isPlaying ? 'Click to stop' : 'Click to play'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Volume Slider */}
+              <div className="w-full sm:w-64 flex items-center gap-3">
+                <VolumeX className="w-4 h-4 text-gray-500 flex-shrink-0" />
                 <input
                   type="range"
                   min="0"
@@ -368,8 +370,8 @@ function App() {
                   onChange={(e) => setVolume(Number(e.target.value))}
                   className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500
                     [&::-webkit-slider-thumb]:appearance-none
-                    [&::-webkit-slider-thumb]:w-5
-                    [&::-webkit-slider-thumb]:h-5
+                    [&::-webkit-slider-thumb]:w-4
+                    [&::-webkit-slider-thumb]:h-4
                     [&::-webkit-slider-thumb]:rounded-full
                     [&::-webkit-slider-thumb]:bg-gradient-to-br
                     [&::-webkit-slider-thumb]:from-orange-500
@@ -378,8 +380,8 @@ function App() {
                     [&::-webkit-slider-thumb]:cursor-pointer
                     [&::-webkit-slider-thumb]:transition-transform
                     [&::-webkit-slider-thumb]:hover:scale-110
-                    [&::-moz-range-thumb]:w-5
-                    [&::-moz-range-thumb]:h-5
+                    [&::-moz-range-thumb]:w-4
+                    [&::-moz-range-thumb]:h-4
                     [&::-moz-range-thumb]:rounded-full
                     [&::-moz-range-thumb]:bg-gradient-to-br
                     [&::-moz-range-thumb]:from-orange-500
@@ -389,9 +391,9 @@ function App() {
                     [&::-moz-range-thumb]:cursor-pointer
                   "
                 />
-                <Volume2 className="w-5 h-5 text-gray-700 flex-shrink-0" />
+                <Volume2 className="w-4 h-4 text-gray-700 flex-shrink-0" />
+                <span className="text-sm text-gray-700 font-medium w-10 text-right">{volume}%</span>
               </div>
-              <p className="text-center text-sm text-gray-600">{volume}%</p>
             </div>
           </div>
         </div>
