@@ -335,8 +335,8 @@ function App() {
       const sampleRate = audioContextRef.current.sampleRate;
       const frequency = autoCorrelate(buffer, sampleRate);
 
-      if (frequency && frequency > 0) {
-        // Valid frequency detected
+      if (frequency > 0) {
+        // Valid frequency detected (frequency > 0)
 
         // === STEP 2: FIND CLOSEST SWARA ===
         // Match detected frequency to nearest swara across all octaves
@@ -426,51 +426,56 @@ function App() {
   // Uses auto-correlation to find the fundamental frequency (pitch) from audio signal
   // This is more accurate than FFT for musical pitch detection
   const autoCorrelate = (buffer: Float32Array, sampleRate: number): number | null => {
-    // === STEP 1: VOLUME THRESHOLD CHECK ===
-    // Calculate RMS (Root Mean Square) to detect if there's sufficient audio signal
-    let rms = 0;
-    for (let i = 0; i < buffer.length; i++) {
-      rms += buffer[i] * buffer[i];
-    }
-    rms = Math.sqrt(rms / buffer.length);
-    if (rms < 0.01) return null; // Too quiet - no pitch detected
+    const SIZE = buffer.length;
+    const MAX_SAMPLES = Math.floor(SIZE / 2);
+    let bestOffset = -1;
+    let bestCorrelation = 0;
 
-    // === STEP 2: FIND PERIOD USING AUTO-CORRELATION ===
-    // Auto-correlation finds repeating patterns in the waveform
-    // The period of repetition corresponds to the fundamental frequency
-    let maxCorrelation = 0;
-    let maxCorrelationIndex = -1;
+    // === STEP 1: CALCULATE RMS TO DETECT IF THERE'S SOUND ===
+    let rms = 0;
+    for (let i = 0; i < SIZE; i++) {
+      const val = buffer[i];
+      rms += val * val;
+    }
+    rms = Math.sqrt(rms / SIZE);
+
+    // Silence threshold - ignore very quiet sounds
+    if (rms < 0.01) {
+      return -1; // No sound detected
+    }
+
+    // === STEP 2: FIND BEST AUTOCORRELATION OFFSET ===
     let lastCorrelation = 1;
 
-    // Test different offset values to find the best match
-    for (let offset = 0; offset < buffer.length / 2; offset++) {
+    for (let offset = 0; offset < MAX_SAMPLES; offset++) {
       let correlation = 0;
 
       // Compare signal with itself at different time offsets
-      for (let i = 0; i < buffer.length / 2; i++) {
+      for (let i = 0; i < MAX_SAMPLES; i++) {
         correlation += Math.abs(buffer[i] - buffer[i + offset]);
       }
 
       // Normalize correlation (1 = perfect match, 0 = no match)
-      correlation = 1 - correlation / (buffer.length / 2);
+      correlation = 1 - (correlation / MAX_SAMPLES);
 
       // Look for high correlation peaks (>0.9) after a dip
       // This indicates we've found the period of the waveform
       if (correlation > 0.9 && correlation > lastCorrelation) {
-        const foundGoodCorrelation = correlation > maxCorrelation;
-        if (foundGoodCorrelation) {
-          maxCorrelation = correlation;
-          maxCorrelationIndex = offset;
+        if (correlation > bestCorrelation) {
+          bestCorrelation = correlation;
+          bestOffset = offset;
         }
       }
+
       lastCorrelation = correlation;
     }
 
-    if (maxCorrelationIndex === -1) return null; // No clear pitch found
+    // === STEP 3: CALCULATE FREQUENCY IF GOOD CORRELATION FOUND ===
+    if (bestCorrelation > 0.01 && bestOffset > 0) {
+      return sampleRate / bestOffset;
+    }
 
-    // === STEP 3: CONVERT PERIOD TO FREQUENCY ===
-    // Frequency = Sample Rate / Period (in samples)
-    return sampleRate / maxCorrelationIndex;
+    return -1; // No pitch detected
   };
 
   useEffect(() => {
