@@ -149,6 +149,7 @@ interface NoteHistoryItem {
   octave: 'lower' | 'middle' | 'upper';
   isCorrect: boolean;
   cents: number;
+  color: 'red' | 'green' | 'yellow' | 'gray';
 }
 
 function App() {
@@ -286,23 +287,23 @@ function App() {
     setNoteHistory([]);
   };
 
-  // Determine color coding for note history items
-  // Gray = wrong note (not in selection)
-  // Green = perfect (±10¢)
-  // Yellow = slightly off (±30¢)
-  // Red = very off (>30¢)
+  // Determine color coding for note history items based on stored color
+  // Red = wrong note (not selected)
+  // Green = perfect pitch (±15¢)
+  // Yellow = slightly off-tune (±35¢)
+  // Gray = very off-tune (>35¢)
   const getNoteColorClass = (note: NoteHistoryItem) => {
-    if (!note.isCorrect) {
-      return 'bg-gray-400'; // Wrong note (not in selection)
-    }
-
-    const absCents = Math.abs(note.cents);
-    if (absCents <= 10) {
-      return 'bg-green-500'; // Perfect pitch
-    } else if (absCents <= 30) {
-      return 'bg-yellow-500'; // Slightly off-tune
-    } else {
-      return 'bg-red-500'; // Very off-tune
+    switch (note.color) {
+      case 'red':
+        return 'bg-red-500'; // Wrong note (not selected)
+      case 'green':
+        return 'bg-green-500'; // Perfect pitch
+      case 'yellow':
+        return 'bg-yellow-500'; // Slightly off-tune
+      case 'gray':
+        return 'bg-gray-400'; // Very off-tune
+      default:
+        return 'bg-gray-400';
     }
   };
 
@@ -369,7 +370,19 @@ function App() {
                 }
 
                 // Determine color based on accuracy and selection
-                const color = isCorrect;
+                const isSelected = selectedSwaras.includes(result.swara);
+                const absCents = Math.abs(result.cents);
+
+                let color: 'red' | 'green' | 'yellow' | 'gray';
+                if (!isSelected) {
+                  color = 'red'; // Wrong note (not selected)
+                } else if (absCents <= 15) {
+                  color = 'green'; // Perfect pitch
+                } else if (absCents <= 35) {
+                  color = 'yellow'; // Slightly off-tune
+                } else {
+                  color = 'gray'; // Very off-tune
+                }
 
                 // Create note object
                 const newNote: NoteHistoryItem = {
@@ -378,8 +391,9 @@ function App() {
                   frequency: result.frequency,
                   timestamp: now,
                   octave: result.octave,
-                  isCorrect: color,
+                  isCorrect,
                   cents: result.cents,
+                  color,
                 };
 
                 // Keep last 100 notes (prevent memory issues)
