@@ -141,6 +141,21 @@ const tanpuraAudio: { [key: string]: string } = {
   "B":  "/audio/tanpura-B.mp3"
 };
 
+const swaraNames: { [key: string]: string } = {
+  "S": "Shadja",
+  "R1": "Komal Rishabh",
+  "R2": "Shuddh Rishabh",
+  "G1": "Komal Gandhar",
+  "G2": "Shuddh Gandhar",
+  "M1": "Shuddh Madhyam",
+  "M2": "Tivra Madhyam",
+  "P": "Pancham",
+  "D1": "Komal Dhaivat",
+  "D2": "Shuddh Dhaivat",
+  "N1": "Komal Nishad",
+  "N2": "Shuddh Nishad"
+};
+
 interface NoteHistoryItem {
   id: number;
   swara: string;
@@ -151,6 +166,11 @@ interface NoteHistoryItem {
   cents: number;
   color: 'red' | 'green' | 'yellow' | 'gray';
 }
+
+// Helper function to get full swara name
+const getSwaraName = (swara: string): string => {
+  return swaraNames[swara] || swara;
+};
 
 function App() {
   // === GLOBAL STATE MANAGEMENT ===
@@ -174,6 +194,7 @@ function App() {
   const [currentNoteName, setCurrentNoteName] = useState<string>(''); // Frequency display
   const [currentCents, setCurrentCents] = useState<number>(0); // Pitch deviation in cents
   const [currentIsCorrect, setCurrentIsCorrect] = useState<boolean>(false); // Is note in selection
+  const [currentOctave, setCurrentOctave] = useState<'lower' | 'middle' | 'upper'>('middle'); // Current octave
 
   // === REFS FOR AUDIO PROCESSING ===
 
@@ -276,6 +297,7 @@ function App() {
     setCurrentNoteName('');
     setCurrentCents(0);
     setCurrentIsCorrect(false);
+    setCurrentOctave('middle');
 
     setIsAnalyzing(false);
   };
@@ -349,6 +371,7 @@ function App() {
           setCurrentNoteName(`${result.frequency.toFixed(1)} Hz`);
           setCurrentCents(result.cents);
           setCurrentIsCorrect(isCorrect);
+          setCurrentOctave(result.octave);
 
           // Check for note stability (for adding to history)
           const detectedSwara = result.swara;
@@ -428,6 +451,7 @@ function App() {
         setCurrentNoteName('');
         setCurrentCents(0);
         setCurrentIsCorrect(false);
+        setCurrentOctave('middle');
 
         // Reset stability
         currentDetectedNote = null;
@@ -1096,11 +1120,19 @@ function App() {
               <div className="mt-8 bg-white rounded-xl shadow-lg p-6 border border-gray-200">
                 <div className="text-center">
                   <div className="text-sm text-gray-600 mb-2 font-medium">Currently Singing:</div>
-                  <div className="text-6xl font-extrabold text-orange-600 leading-none my-3">
+                  <div className="relative inline-block text-6xl font-extrabold text-orange-600 leading-none my-3">
                     {currentNote}
+                    {/* Octave indicator - dot above for upper octave */}
+                    {currentOctave === 'upper' && currentNote !== '–' && (
+                      <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 w-2.5 h-2.5 bg-orange-600 rounded-full"></div>
+                    )}
+                    {/* Octave indicator - dot below for lower octave */}
+                    {currentOctave === 'lower' && currentNote !== '–' && (
+                      <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2.5 h-2.5 bg-orange-600 rounded-full"></div>
+                    )}
                   </div>
                   <div className="text-lg text-gray-600 mb-6 min-h-[28px]">
-                    {currentNoteName}
+                    {currentNoteName && `(${getSwaraName(currentNote)}) • ${currentNoteName}`}
                   </div>
 
                   {/* Pitch Accuracy Meter */}
@@ -1125,7 +1157,16 @@ function App() {
                         ></div>
                       </div>
                     </div>
-                    <div className="mt-3 text-base font-semibold text-gray-700">
+                    <div
+                      className="mt-3 text-base font-semibold transition-colors duration-200"
+                      style={{
+                        color: Math.abs(currentCents) <= 10
+                          ? '#22c55e' // green for perfect
+                          : Math.abs(currentCents) <= 25
+                          ? '#eab308' // yellow for slightly off
+                          : '#ef4444' // red for very off
+                      }}
+                    >
                       {currentCents > 0 ? '+' : ''}{currentCents.toFixed(0)}¢
                     </div>
                   </div>
