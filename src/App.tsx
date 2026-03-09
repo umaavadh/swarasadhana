@@ -904,6 +904,13 @@ function App() {
                   <div className="relative h-full flex justify-center">
                     {noteMapping.map((note, idx) => {
                       const isSelected = selectedNotes.has(note.swara);
+                      const isCurrentNote = isAnalyzing && currentNote === note.swara && currentOctave === 'upper';
+                      const highlightClass = isCurrentNote
+                        ? isSelected
+                          ? 'shadow-[0_0_20px_rgba(34,197,94,0.8)] !-translate-y-0.5'
+                          : 'shadow-[0_0_20px_rgba(239,68,68,0.8)] !-translate-y-0.5'
+                        : '';
+
                       return note.isBlack ? (
                         <button
                           key={`upper-${note.swara}`}
@@ -912,7 +919,7 @@ function App() {
                             isSelected
                               ? 'bg-gradient-to-b from-orange-600 to-orange-800 text-white'
                               : 'bg-gradient-to-b from-gray-700 to-gray-900 text-gray-200 hover:from-gray-600 hover:to-gray-800'
-                          }`}
+                          } ${highlightClass}`}
                           style={{
                             left: `${idx * 8.33}%`,
                             zIndex: 10,
@@ -931,7 +938,7 @@ function App() {
                             isSelected
                               ? 'bg-gradient-to-b from-orange-100 to-orange-300 border-orange-500 text-orange-900'
                               : 'bg-gradient-to-b from-white to-gray-50 border-gray-300 text-gray-700 hover:from-orange-50 hover:to-orange-100'
-                          }`}
+                          } ${highlightClass}`}
                           style={{ zIndex: 1 }}
                         >
                           <div className="flex flex-col items-center justify-end h-full pb-3">
@@ -954,6 +961,13 @@ function App() {
                   <div className="relative h-full flex justify-center">
                     {noteMapping.map((note, idx) => {
                       const isSelected = selectedNotes.has(note.swara);
+                      const isCurrentNote = isAnalyzing && currentNote === note.swara && currentOctave === 'middle';
+                      const highlightClass = isCurrentNote
+                        ? isSelected
+                          ? 'shadow-[0_0_20px_rgba(34,197,94,0.8)] !-translate-y-0.5'
+                          : 'shadow-[0_0_20px_rgba(239,68,68,0.8)] !-translate-y-0.5'
+                        : '';
+
                       return note.isBlack ? (
                         <button
                           key={`middle-${note.swara}`}
@@ -962,7 +976,7 @@ function App() {
                             isSelected
                               ? 'bg-gradient-to-b from-orange-600 to-orange-800 text-white'
                               : 'bg-gradient-to-b from-gray-700 to-gray-900 text-gray-200 hover:from-gray-600 hover:to-gray-800'
-                          }`}
+                          } ${highlightClass}`}
                           style={{
                             left: `${idx * 8.33}%`,
                             zIndex: 10,
@@ -980,7 +994,7 @@ function App() {
                             isSelected
                               ? 'bg-gradient-to-b from-orange-100 to-orange-300 border-orange-500 text-orange-900'
                               : 'bg-gradient-to-b from-white to-gray-50 border-gray-300 text-gray-700 hover:from-orange-50 hover:to-orange-100'
-                          }`}
+                          } ${highlightClass}`}
                           style={{ zIndex: 1 }}
                         >
                           <div className="flex flex-col items-center justify-end h-full pb-3">
@@ -1002,6 +1016,13 @@ function App() {
                   <div className="relative h-full flex justify-center">
                     {noteMapping.map((note, idx) => {
                       const isSelected = selectedNotes.has(note.swara);
+                      const isCurrentNote = isAnalyzing && currentNote === note.swara && currentOctave === 'lower';
+                      const highlightClass = isCurrentNote
+                        ? isSelected
+                          ? 'shadow-[0_0_20px_rgba(34,197,94,0.8)] !-translate-y-0.5'
+                          : 'shadow-[0_0_20px_rgba(239,68,68,0.8)] !-translate-y-0.5'
+                        : '';
+
                       return note.isBlack ? (
                         <button
                           key={`lower-${note.swara}`}
@@ -1010,7 +1031,7 @@ function App() {
                             isSelected
                               ? 'bg-gradient-to-b from-orange-600 to-orange-800 text-white'
                               : 'bg-gradient-to-b from-gray-700 to-gray-900 text-gray-200 hover:from-gray-600 hover:to-gray-800'
-                          }`}
+                          } ${highlightClass}`}
                           style={{
                             left: `${idx * 8.33}%`,
                             zIndex: 10,
@@ -1029,7 +1050,7 @@ function App() {
                             isSelected
                               ? 'bg-gradient-to-b from-orange-100 to-orange-300 border-orange-500 text-orange-900'
                               : 'bg-gradient-to-b from-white to-gray-50 border-gray-300 text-gray-700 hover:from-orange-50 hover:to-orange-100'
-                          }`}
+                          } ${highlightClass}`}
                           style={{ zIndex: 1 }}
                         >
                           <div className="flex flex-col items-center justify-end h-full pb-3">
