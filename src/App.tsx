@@ -306,9 +306,9 @@ function App() {
     }
   };
 
-  // === CONTINUOUS PITCH DETECTION ENGINE ===
-  // This is the core function that runs continuously while analysis is active
-  // It detects pitch, tracks stability, and updates both real-time display and history
+  // === CONTINUOUS PITCH DETECTION LOOP ===
+  // Runs at 10 updates per second (100ms intervals)
+  // Detects pitch, validates frequency range (80-1500 Hz), tracks stability, and updates display
   const detectPitchContinuously = () => {
     if (!analyserRef.current || !audioContextRef.current) return;
 
@@ -322,59 +322,53 @@ function App() {
     let currentStabilityCounter = 0; // How many consecutive times same note detected
     const STABILITY_THRESHOLD = 4; // Must detect same note 4 times in a row (~0.4 seconds @ 100ms per frame)
 
-    // === MAIN DETECTION LOOP ===
-    // Runs continuously via requestAnimationFrame (~60fps, processes every ~100ms)
-    const detectPitch = () => {
-      if (!analyserRef.current || !audioContextRef.current) return;
+    // === UPDATE PITCH FUNCTION ===
+    // Processes audio data and updates display
+    const updatePitch = () => {
+      if (!isAnalyzing || !analyserRef.current || !audioContextRef.current) return;
 
-      // Get time-domain audio data from microphone
+      // Get audio data from microphone
       analyserRef.current.getFloatTimeDomainData(buffer);
 
-      // === STEP 1: PITCH DETECTION ===
-      // Use auto-correlation algorithm to detect fundamental frequency
+      // Detect fundamental frequency
       const sampleRate = audioContextRef.current.sampleRate;
       const frequency = autoCorrelate(buffer, sampleRate);
 
-      if (frequency > 0) {
-        // Valid frequency detected (frequency > 0)
+      if (frequency > 0 && frequency >= 80 && frequency <= 1500) {
+        // Valid vocal frequency detected (80-1500 Hz range)
 
-        // === STEP 2: FIND CLOSEST SWARA ===
-        // Match detected frequency to nearest swara across all octaves
-        const match = findClosestSwara(frequency, currentScale);
+        const result = findClosestSwara(frequency, currentScale);
 
-        if (match) {
+        if (result) {
           // Check if detected note is in user's selection
-          const isCorrect = selectedNotes.size === 0 || selectedNotes.has(match.swara);
+          const isCorrect = selectedNotes.size === 0 || selectedNotes.has(result.swara);
 
-          // === STEP 3: UPDATE REAL-TIME DISPLAY ===
-          // Always update immediately (provides instant visual feedback)
-          setCurrentNote(match.swara);
-          setCurrentNoteName(`${match.frequency.toFixed(1)} Hz`);
-          setCurrentCents(match.cents);
+          // Update real-time display
+          setCurrentNote(result.swara);
+          setCurrentNoteName(`${result.frequency.toFixed(1)} Hz`);
+          setCurrentCents(result.cents);
           setCurrentIsCorrect(isCorrect);
 
-          // === STEP 4: STABILITY TRACKING FOR HISTORY ===
-          // Only add to history if note is held steadily
-          const detectedSwara = match.swara;
-          const detectedOctave = match.octave;
+          // Check for note stability (for adding to history)
+          const detectedSwara = result.swara;
+          const detectedOctave = result.octave;
 
           if (detectedSwara === currentDetectedNote && detectedOctave === currentDetectedOctave) {
             // Same note as before - increment stability counter
             currentStabilityCounter++;
 
-            // === STEP 5: ADD TO HISTORY WHEN STABLE ===
-            // After STABILITY_THRESHOLD consecutive detections, add to history
+            // Add to history when stable
             if (currentStabilityCounter === STABILITY_THRESHOLD) {
               const now = Date.now();
               setNoteHistory((prev) => {
                 const newNote: NoteHistoryItem = {
                   id: nextNoteId.current++,
-                  swara: match.swara,
-                  frequency: match.frequency,
+                  swara: result.swara,
+                  frequency: result.frequency,
                   timestamp: now,
-                  octave: match.octave,
+                  octave: result.octave,
                   isCorrect,
-                  cents: match.cents,
+                  cents: result.cents,
                 };
 
                 // Keep last 100 notes (prevent memory issues)
@@ -404,22 +398,26 @@ function App() {
           }
         }
       } else {
-        // === NO PITCH DETECTED ===
-        // Reset display and stability tracking
+        // No valid pitch detected - clear display
         setCurrentNote('–');
         setCurrentNoteName('');
         setCurrentCents(0);
+        setCurrentIsCorrect(false);
+
+        // Reset stability
         currentDetectedNote = null;
         currentDetectedOctave = null;
         currentStabilityCounter = 0;
       }
 
-      // Schedule next frame
-      animationFrameRef.current = requestAnimationFrame(detectPitch);
+      // Continue loop (10 updates per second)
+      animationFrameRef.current = requestAnimationFrame(() => {
+        setTimeout(updatePitch, 100);
+      });
     };
 
     // Start the detection loop
-    detectPitch();
+    updatePitch();
   };
 
   // === AUTO-CORRELATION PITCH DETECTION ALGORITHM ===
