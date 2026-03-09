@@ -528,7 +528,6 @@ function App() {
                           }}
                         >
                           <div className="flex flex-col items-center justify-center h-full">
-                            <span className="text-xs opacity-70">{note.western}</span>
                             <span className="font-bold text-lg">{note.swara}</span>
                             <div className="w-1 h-1 bg-current rounded-full mt-1 opacity-70"></div>
                           </div>
@@ -545,7 +544,6 @@ function App() {
                           style={{ zIndex: 1 }}
                         >
                           <div className="flex flex-col items-center justify-end h-full pb-3">
-                            <span className="text-xs opacity-70 mb-1">{note.western}</span>
                             <span className="font-bold text-xl sm:text-2xl">{note.swara}</span>
                             <div className="w-1 h-1 bg-current rounded-full mt-2 opacity-70"></div>
                           </div>
@@ -580,7 +578,6 @@ function App() {
                           }}
                         >
                           <div className="flex flex-col items-center justify-center h-full">
-                            <span className="text-xs opacity-70">{note.western}</span>
                             <span className="font-bold text-lg">{note.swara}</span>
                           </div>
                         </button>
@@ -596,7 +593,6 @@ function App() {
                           style={{ zIndex: 1 }}
                         >
                           <div className="flex flex-col items-center justify-end h-full pb-3">
-                            <span className="text-xs opacity-70 mb-1">{note.western}</span>
                             <span className="font-bold text-xl sm:text-2xl">{note.swara}</span>
                           </div>
                         </button>
@@ -631,7 +627,6 @@ function App() {
                         >
                           <div className="flex flex-col items-center justify-center h-full">
                             <div className="w-1 h-1 bg-current rounded-full mb-1 opacity-70"></div>
-                            <span className="text-xs opacity-70">{note.western}</span>
                             <span className="font-bold text-lg">{note.swara}</span>
                           </div>
                         </button>
@@ -648,7 +643,6 @@ function App() {
                         >
                           <div className="flex flex-col items-center justify-end h-full pb-3">
                             <div className="w-1 h-1 bg-current rounded-full mb-2 opacity-70"></div>
-                            <span className="text-xs opacity-70 mb-1">{note.western}</span>
                             <span className="font-bold text-xl sm:text-2xl">{note.swara}</span>
                           </div>
                         </button>
