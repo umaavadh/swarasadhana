@@ -340,7 +340,7 @@ function App() {
 
         // === STEP 2: FIND CLOSEST SWARA ===
         // Match detected frequency to nearest swara across all octaves
-        const match = findClosestSwara(frequency, frequencyData.allFrequencies);
+        const match = findClosestSwara(frequency, currentScale);
 
         if (match) {
           // Check if detected note is in user's selection

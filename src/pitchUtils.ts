@@ -45,7 +45,8 @@ const swaraSemitones: { [key: string]: number } = {
   'N2': 11
 };
 
-const swaraNames = ['S', 'R1', 'R2', 'G1', 'G2', 'M1', 'M2', 'P', 'D1', 'D2', 'N1', 'N2'];
+// Map semitone index to swara name
+const swaraMap = ['S', 'R1', 'R2', 'G1', 'G2', 'M1', 'M2', 'P', 'D1', 'D2', 'N1', 'N2'];
 
 export function calculateFrequencies(scale: string): {
   lowerOctave: SwaraFrequency[];
@@ -59,7 +60,7 @@ export function calculateFrequencies(scale: string): {
   const middleOctave: SwaraFrequency[] = [];
   const upperOctave: SwaraFrequency[] = [];
 
-  swaraNames.forEach((swara) => {
+  swaraMap.forEach((swara) => {
     const semitones = swaraSemitones[swara];
     const middleFrequency = saFrequency * Math.pow(2, semitones / 12);
     const lowerFrequency = middleFrequency / 2;
@@ -99,34 +100,59 @@ export function calculateFrequencies(scale: string): {
 
 export function findClosestSwara(
   detectedFrequency: number,
-  allFrequencies: SwaraFrequency[]
+  currentScale: string
 ): ClosestSwaraMatch | null {
-  if (!detectedFrequency || detectedFrequency <= 0 || allFrequencies.length === 0) {
+  if (!detectedFrequency || detectedFrequency < 0) {
     return null;
   }
 
-  let closestMatch: SwaraFrequency | null = null;
-  let minDifference = Infinity;
+  // Get Sa frequency for current scale
+  const saFrequency = scaleFrequencies[currentScale] || scaleFrequencies['C'];
 
-  allFrequencies.forEach((swaraFreq) => {
-    const difference = Math.abs(swaraFreq.frequency - detectedFrequency);
-    if (difference < minDifference) {
-      minDifference = difference;
-      closestMatch = swaraFreq;
-    }
-  });
+  // Calculate semitones from Sa
+  const semitones = 12 * Math.log2(detectedFrequency / saFrequency);
 
-  if (!closestMatch) {
-    return null;
+  // Determine octave
+  let octave: OctaveLabel;
+  if (detectedFrequency < saFrequency * 0.7) {
+    octave = 'lower';
+  } else if (detectedFrequency > saFrequency * 1.8) {
+    octave = 'upper';
+  } else {
+    octave = 'middle';
   }
 
-  const cents = 1200 * Math.log2(detectedFrequency / closestMatch.frequency);
+  // Normalize semitones to 0-11 range
+  let normalizedSemitones = semitones % 12;
+  if (normalizedSemitones < 0) {
+    normalizedSemitones += 12;
+  }
+
+  // Find closest swara
+  const swaraIndex = Math.round(normalizedSemitones) % 12;
+  const swara = swaraMap[swaraIndex];
+
+  // Calculate cents deviation from perfect pitch
+  const exactSemitone = normalizedSemitones;
+  const roundedSemitone = Math.round(normalizedSemitones);
+  const cents = Math.round((exactSemitone - roundedSemitone) * 100);
+
+  // Calculate target frequency (perfect pitch for this swara)
+  const targetSemitones = swaraSemitones[swara];
+  let targetFrequency = saFrequency * Math.pow(2, targetSemitones / 12);
+
+  // Adjust target frequency for octave
+  if (octave === 'lower') {
+    targetFrequency = targetFrequency / 2;
+  } else if (octave === 'upper') {
+    targetFrequency = targetFrequency * 2;
+  }
 
   return {
-    swara: closestMatch.swara,
-    octave: closestMatch.octaveLabel,
-    cents: Math.round(cents),
+    swara: swara,
+    octave: octave,
+    cents: cents,
     frequency: detectedFrequency,
-    targetFrequency: closestMatch.frequency
+    targetFrequency: targetFrequency
   };
 }
