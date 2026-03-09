@@ -141,6 +141,13 @@ const tanpuraAudio: { [key: string]: string } = {
   "B":  "/audio/tanpura-B.mp3"
 };
 
+interface NoteHistoryItem {
+  id: number;
+  swara: string;
+  frequency: number;
+  timestamp: number;
+}
+
 function App() {
   const [selectedScale, setSelectedScale] = useState('C');
   const [selectedNotes, setSelectedNotes] = useState<Set<string>>(new Set());
@@ -148,6 +155,7 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(70);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [noteHistory, setNoteHistory] = useState<NoteHistoryItem[]>([]);
   const scales = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -156,6 +164,7 @@ function App() {
   const microphoneRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const noteTrackerRef = useRef<HTMLDivElement | null>(null);
 
   const frequencyData = useMemo(() => {
     return calculateFrequencies(selectedScale);
@@ -221,6 +230,10 @@ function App() {
     }
 
     setIsAnalyzing(false);
+  };
+
+  const clearNoteHistory = () => {
+    setNoteHistory([]);
   };
 
   const detectPitchContinuously = () => {
@@ -830,12 +843,52 @@ function App() {
               </button>
             </div>
 
-            {/* Analysis Placeholder */}
+            {/* Note History Tracker */}
             {isAnalyzing && (
-              <div className="mt-8 p-6 bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl border-2 border-orange-200">
-                <p className="text-center text-gray-700 font-medium">
-                  Analysis active - Real-time pitch detection will be displayed here
-                </p>
+              <div className="mt-8 bg-white rounded-xl shadow-md p-6 border border-gray-200">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-bold text-gray-800">Your Practice Session:</h3>
+                  <button
+                    onClick={clearNoteHistory}
+                    className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-400"
+                  >
+                    Clear History
+                  </button>
+                </div>
+
+                <div
+                  ref={noteTrackerRef}
+                  className="w-full min-h-[90px] max-h-[90px] overflow-x-auto overflow-y-hidden whitespace-nowrap p-5 bg-gray-50 border-2 border-gray-200 rounded-xl flex items-center gap-1.5 scroll-smooth
+                    [&::-webkit-scrollbar]:h-2
+                    [&::-webkit-scrollbar-track]:bg-gray-100
+                    [&::-webkit-scrollbar-track]:rounded
+                    [&::-webkit-scrollbar-thumb]:bg-gray-300
+                    [&::-webkit-scrollbar-thumb]:rounded
+                    [&::-webkit-scrollbar-thumb:hover]:bg-gray-400"
+                >
+                  {noteHistory.length === 0 ? (
+                    <p className="text-gray-500 text-center w-full">
+                      Start singing to see detected notes appear here...
+                    </p>
+                  ) : (
+                    noteHistory.map((note) => (
+                      <div
+                        key={note.id}
+                        className="inline-flex flex-col items-center justify-center px-4 py-2 bg-gradient-to-br from-orange-500 to-amber-600 text-white rounded-lg shadow-md min-w-[60px] shrink-0 transform transition-transform hover:scale-105"
+                      >
+                        <span className="text-lg font-bold">{note.swara}</span>
+                        <span className="text-xs opacity-90">{note.frequency.toFixed(1)} Hz</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="mt-4 p-4 bg-gradient-to-br from-orange-50 to-amber-50 rounded-lg border border-orange-200">
+                  <p className="text-center text-gray-700 font-medium flex items-center justify-center gap-2">
+                    <Activity className="w-5 h-5 text-orange-600 animate-pulse" />
+                    Analysis active - Sing to detect your swaras
+                  </p>
+                </div>
               </div>
             )}
           </div>
