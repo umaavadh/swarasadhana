@@ -309,6 +309,11 @@ function App() {
     setNoteHistory([]);
   };
 
+  // Get array of selected swaras from piano
+  const getSelectedSwaras = (): string[] => {
+    return Array.from(selectedNotes);
+  };
+
   // Determine color coding for note history items based on stored color
   // Red = wrong note (not selected)
   // Green = perfect pitch (±15¢)
