@@ -361,13 +361,24 @@ function App() {
             if (currentStabilityCounter === STABILITY_THRESHOLD) {
               const now = Date.now();
               setNoteHistory((prev) => {
+                // Check if this is a duplicate of the immediately previous note
+                const lastNote = prev[prev.length - 1];
+                if (lastNote && lastNote.swara === result.swara && lastNote.octave === result.octave) {
+                  // Same note being held - don't add duplicate
+                  return prev;
+                }
+
+                // Determine color based on accuracy and selection
+                const color = isCorrect;
+
+                // Create note object
                 const newNote: NoteHistoryItem = {
                   id: nextNoteId.current++,
                   swara: result.swara,
                   frequency: result.frequency,
                   timestamp: now,
                   octave: result.octave,
-                  isCorrect,
+                  isCorrect: color,
                   cents: result.cents,
                 };
 
