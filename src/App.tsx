@@ -151,22 +151,108 @@ function App() {
   const scales = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const microphoneRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const frequencyData = useMemo(() => {
     return calculateFrequencies(selectedScale);
   }, [selectedScale]);
 
-  const toggleAnalysis = async () => {
-    if (!isAnalyzing) {
-      try {
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-        setIsAnalyzing(true);
-      } catch (err) {
-        console.error('Microphone access denied:', err);
-        alert('Microphone access is required for vocal analysis. Please allow microphone access and try again.');
+  const startVocalAnalysis = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: false
+        }
+      });
+
+      streamRef.current = stream;
+
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      audioContextRef.current = new AudioContextClass();
+
+      analyserRef.current = audioContextRef.current.createAnalyser();
+      analyserRef.current.fftSize = 2048;
+      analyserRef.current.smoothingTimeConstant = 0.8;
+
+      microphoneRef.current = audioContextRef.current.createMediaStreamSource(stream);
+      microphoneRef.current.connect(analyserRef.current);
+
+      setIsAnalyzing(true);
+
+      detectPitchContinuously();
+    } catch (error: any) {
+      console.error('Microphone access error:', error);
+
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        alert('Microphone access denied. Please allow microphone permission in your browser settings and try again.');
+      } else if (error.name === 'NotFoundError') {
+        alert('No microphone found. Please connect a microphone and try again.');
+      } else {
+        alert('Error accessing microphone: ' + error.message);
       }
+    }
+  };
+
+  const stopVocalAnalysis = () => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    if (microphoneRef.current) {
+      microphoneRef.current.disconnect();
+      microphoneRef.current = null;
+    }
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+
+    setIsAnalyzing(false);
+  };
+
+  const detectPitchContinuously = () => {
+    if (!analyserRef.current) return;
+
+    const bufferLength = analyserRef.current.fftSize;
+    const buffer = new Float32Array(bufferLength);
+
+    const detectPitch = () => {
+      if (!analyserRef.current) return;
+
+      analyserRef.current.getFloatTimeDomainData(buffer);
+
+      animationFrameRef.current = requestAnimationFrame(detectPitch);
+    };
+
+    detectPitch();
+  };
+
+  useEffect(() => {
+    return () => {
+      if (isAnalyzing) {
+        stopVocalAnalysis();
+      }
+    };
+  }, []);
+
+  const toggleAnalysis = () => {
+    if (!isAnalyzing) {
+      startVocalAnalysis();
     } else {
-      setIsAnalyzing(false);
+      stopVocalAnalysis();
     }
   };
 
