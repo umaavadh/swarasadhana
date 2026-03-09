@@ -161,6 +161,12 @@ function App() {
   const [noteHistory, setNoteHistory] = useState<NoteHistoryItem[]>([]);
   const scales = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
+  // Real-time current note display
+  const [currentNote, setCurrentNote] = useState<string>('–');
+  const [currentNoteName, setCurrentNoteName] = useState<string>('');
+  const [currentCents, setCurrentCents] = useState<number>(0);
+  const [currentIsCorrect, setCurrentIsCorrect] = useState<boolean>(false);
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -168,6 +174,7 @@ function App() {
   const animationFrameRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const noteTrackerRef = useRef<HTMLDivElement | null>(null);
+  const nextNoteId = useRef(1);
 
   const frequencyData = useMemo(() => {
     return calculateFrequencies(selectedScale);
@@ -232,6 +239,12 @@ function App() {
       audioContextRef.current = null;
     }
 
+    // Reset real-time display
+    setCurrentNote('–');
+    setCurrentNoteName('');
+    setCurrentCents(0);
+    setCurrentIsCorrect(false);
+
     setIsAnalyzing(false);
   };
 
@@ -255,20 +268,117 @@ function App() {
   };
 
   const detectPitchContinuously = () => {
-    if (!analyserRef.current) return;
+    if (!analyserRef.current || !audioContextRef.current) return;
 
     const bufferLength = analyserRef.current.fftSize;
     const buffer = new Float32Array(bufferLength);
+    let lastNoteTime = 0;
+    let lastDetectedSwara = '';
 
     const detectPitch = () => {
-      if (!analyserRef.current) return;
+      if (!analyserRef.current || !audioContextRef.current) return;
 
       analyserRef.current.getFloatTimeDomainData(buffer);
+
+      // Auto-correlation pitch detection
+      const sampleRate = audioContextRef.current.sampleRate;
+      const frequency = autoCorrelate(buffer, sampleRate);
+
+      if (frequency && frequency > 0) {
+        const match = findClosestSwara(frequency, frequencyData.allFrequencies);
+
+        if (match) {
+          const isCorrect = selectedNotes.size === 0 || selectedNotes.has(match.swara);
+
+          // Update real-time display (updates every frame ~100ms)
+          setCurrentNote(match.swara);
+          setCurrentNoteName(`${match.frequency.toFixed(1)} Hz`);
+          setCurrentCents(match.cents);
+          setCurrentIsCorrect(isCorrect);
+
+          // Add to history if held for 500ms (prevents rapid flickering in history)
+          const now = Date.now();
+          if (match.swara !== lastDetectedSwara || now - lastNoteTime > 500) {
+            setNoteHistory((prev) => {
+              const newNote: NoteHistoryItem = {
+                id: nextNoteId.current++,
+                swara: match.swara,
+                frequency: match.frequency,
+                timestamp: now,
+                octave: match.octave,
+                isCorrect,
+                cents: match.cents,
+              };
+
+              // Keep last 100 notes
+              const updated = [...prev, newNote];
+              if (updated.length > 100) {
+                updated.shift();
+              }
+
+              return updated;
+            });
+
+            lastDetectedSwara = match.swara;
+            lastNoteTime = now;
+
+            // Auto-scroll to latest note
+            setTimeout(() => {
+              if (noteTrackerRef.current) {
+                noteTrackerRef.current.scrollLeft = noteTrackerRef.current.scrollWidth;
+              }
+            }, 50);
+          }
+        }
+      } else {
+        // No clear pitch detected
+        setCurrentNote('–');
+        setCurrentNoteName('');
+        setCurrentCents(0);
+      }
 
       animationFrameRef.current = requestAnimationFrame(detectPitch);
     };
 
     detectPitch();
+  };
+
+  // Auto-correlation pitch detection algorithm
+  const autoCorrelate = (buffer: Float32Array, sampleRate: number): number | null => {
+    // Minimum volume threshold
+    let rms = 0;
+    for (let i = 0; i < buffer.length; i++) {
+      rms += buffer[i] * buffer[i];
+    }
+    rms = Math.sqrt(rms / buffer.length);
+    if (rms < 0.01) return null;
+
+    // Find period using auto-correlation
+    let maxCorrelation = 0;
+    let maxCorrelationIndex = -1;
+    let lastCorrelation = 1;
+
+    for (let offset = 0; offset < buffer.length / 2; offset++) {
+      let correlation = 0;
+      for (let i = 0; i < buffer.length / 2; i++) {
+        correlation += Math.abs(buffer[i] - buffer[i + offset]);
+      }
+      correlation = 1 - correlation / (buffer.length / 2);
+
+      if (correlation > 0.9 && correlation > lastCorrelation) {
+        const foundGoodCorrelation = correlation > maxCorrelation;
+        if (foundGoodCorrelation) {
+          maxCorrelation = correlation;
+          maxCorrelationIndex = offset;
+        }
+      }
+      lastCorrelation = correlation;
+    }
+
+    if (maxCorrelationIndex === -1) return null;
+
+    // Return frequency
+    return sampleRate / maxCorrelationIndex;
   };
 
   useEffect(() => {
@@ -861,9 +971,51 @@ function App() {
               </button>
             </div>
 
+            {/* Real-Time Current Note Display */}
+            {isAnalyzing && (
+              <div className="mt-8 bg-white rounded-xl shadow-lg p-6 border border-gray-200">
+                <div className="text-center">
+                  <div className="text-sm text-gray-600 mb-2 font-medium">Currently Singing:</div>
+                  <div className="text-6xl font-extrabold text-orange-600 leading-none my-3">
+                    {currentNote}
+                  </div>
+                  <div className="text-lg text-gray-600 mb-6 min-h-[28px]">
+                    {currentNoteName}
+                  </div>
+
+                  {/* Pitch Accuracy Meter */}
+                  <div className="mt-6">
+                    <div className="text-sm text-gray-600 mb-3 font-medium">Pitch Accuracy:</div>
+                    <div className="w-full max-w-md mx-auto">
+                      <div className="relative w-full h-10 rounded-full overflow-visible shadow-inner"
+                        style={{
+                          background: 'linear-gradient(to right, #ef4444 0%, #eab308 25%, #22c55e 45%, #22c55e 55%, #eab308 75%, #ef4444 100%)'
+                        }}
+                      >
+                        {/* Center line */}
+                        <div className="absolute left-1/2 top-0 w-0.5 h-full bg-gray-900 transform -translate-x-1/2 z-10"></div>
+
+                        {/* Moving indicator */}
+                        <div
+                          className="absolute top-1/2 w-2 h-12 bg-gray-900 rounded transform -translate-y-1/2 transition-all duration-100 ease-out shadow-lg z-20"
+                          style={{
+                            left: `${50 + (currentCents / 50) * 50}%`,
+                            transform: `translate(-50%, -50%)`
+                          }}
+                        ></div>
+                      </div>
+                    </div>
+                    <div className="mt-3 text-base font-semibold text-gray-700">
+                      {currentCents > 0 ? '+' : ''}{currentCents.toFixed(0)}¢
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Note History Tracker */}
             {isAnalyzing && (
-              <div className="mt-8 bg-white rounded-xl shadow-md p-6 border border-gray-200">
+              <div className="mt-6 bg-white rounded-xl shadow-md p-6 border border-gray-200">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-xl font-bold text-gray-800">Your Practice Session:</h3>
                   <button
