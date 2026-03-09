@@ -152,62 +152,87 @@ interface NoteHistoryItem {
 }
 
 function App() {
-  const [selectedScale, setSelectedScale] = useState('C');
-  const [selectedNotes, setSelectedNotes] = useState<Set<string>>(new Set());
-  const [selectedPreset, setSelectedPreset] = useState('None');
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [volume, setVolume] = useState(70);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [noteHistory, setNoteHistory] = useState<NoteHistoryItem[]>([]);
+  // === GLOBAL STATE MANAGEMENT ===
+
+  // Step 1: Scale and Note Selection
+  const [selectedScale, setSelectedScale] = useState('C'); // Current scale (Sa position)
+  const [selectedNotes, setSelectedNotes] = useState<Set<string>>(new Set()); // Selected swaras from piano
+  const [selectedPreset, setSelectedPreset] = useState('None'); // Current thaat preset
   const scales = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
-  // Real-time current note display
-  const [currentNote, setCurrentNote] = useState<string>('–');
-  const [currentNoteName, setCurrentNoteName] = useState<string>('');
-  const [currentCents, setCurrentCents] = useState<number>(0);
-  const [currentIsCorrect, setCurrentIsCorrect] = useState<boolean>(false);
+  // Step 2: Tanpura Playback
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [volume, setVolume] = useState(70);
 
+  // Step 3: Vocal Analysis State
+  const [isAnalyzing, setIsAnalyzing] = useState(false); // Analysis on/off
+  const [noteHistory, setNoteHistory] = useState<NoteHistoryItem[]>([]); // Continuous note tracker
+
+  // Real-time current note display (updates every ~100ms)
+  const [currentNote, setCurrentNote] = useState<string>('–'); // Current detected swara
+  const [currentNoteName, setCurrentNoteName] = useState<string>(''); // Frequency display
+  const [currentCents, setCurrentCents] = useState<number>(0); // Pitch deviation in cents
+  const [currentIsCorrect, setCurrentIsCorrect] = useState<boolean>(false); // Is note in selection
+
+  // === REFS FOR AUDIO PROCESSING ===
+
+  // Tanpura audio element
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const microphoneRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const noteTrackerRef = useRef<HTMLDivElement | null>(null);
-  const nextNoteId = useRef(1);
 
+  // Web Audio API components for pitch detection
+  const audioContextRef = useRef<AudioContext | null>(null); // Audio context
+  const analyserRef = useRef<AnalyserNode | null>(null); // FFT analyzer
+  const microphoneRef = useRef<MediaStreamAudioSourceNode | null>(null); // Mic input
+  const animationFrameRef = useRef<number | null>(null); // Animation loop ID
+  const streamRef = useRef<MediaStream | null>(null); // Media stream
+
+  // UI refs
+  const noteTrackerRef = useRef<HTMLDivElement | null>(null); // Note history scroll container
+  const nextNoteId = useRef(1); // Unique ID generator for note history
+
+  // === FREQUENCY CALCULATION ===
+  // Calculate all swara frequencies based on selected scale
+  // This recalculates whenever the scale changes (e.g., C to D)
   const frequencyData = useMemo(() => {
     return calculateFrequencies(selectedScale);
   }, [selectedScale]);
 
+  // === START VOCAL ANALYSIS ===
+  // Initializes microphone input and Web Audio API for pitch detection
   const startVocalAnalysis = async () => {
     try {
+      // Request microphone access with optimal settings for vocal detection
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: false
+          echoCancellation: true, // Remove echo
+          noiseSuppression: true, // Reduce background noise
+          autoGainControl: false  // Keep consistent volume for accurate pitch
         }
       });
 
       streamRef.current = stream;
 
+      // Create Web Audio API context (cross-browser compatible)
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       audioContextRef.current = new AudioContextClass();
 
+      // Create analyzer node for frequency analysis
       analyserRef.current = audioContextRef.current.createAnalyser();
-      analyserRef.current.fftSize = 2048;
-      analyserRef.current.smoothingTimeConstant = 0.8;
+      analyserRef.current.fftSize = 2048; // FFT size (higher = more frequency resolution)
+      analyserRef.current.smoothingTimeConstant = 0.8; // Smoothing for stability
 
+      // Connect microphone to analyzer
       microphoneRef.current = audioContextRef.current.createMediaStreamSource(stream);
       microphoneRef.current.connect(analyserRef.current);
 
       setIsAnalyzing(true);
 
+      // Start continuous pitch detection loop
       detectPitchContinuously();
     } catch (error: any) {
       console.error('Microphone access error:', error);
 
+      // User-friendly error messages
       if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
         alert('Microphone access denied. Please allow microphone permission in your browser settings and try again.');
       } else if (error.name === 'NotFoundError') {
@@ -218,28 +243,34 @@ function App() {
     }
   };
 
+  // === STOP VOCAL ANALYSIS ===
+  // Cleanly shuts down all audio processing and resets state
   const stopVocalAnalysis = () => {
+    // Stop animation loop
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
 
+    // Disconnect audio nodes
     if (microphoneRef.current) {
       microphoneRef.current.disconnect();
       microphoneRef.current = null;
     }
 
+    // Stop microphone stream
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
 
+    // Close audio context
     if (audioContextRef.current) {
       audioContextRef.current.close();
       audioContextRef.current = null;
     }
 
-    // Reset real-time display
+    // Reset real-time display to initial state
     setCurrentNote('–');
     setCurrentNoteName('');
     setCurrentCents(0);
@@ -248,123 +279,183 @@ function App() {
     setIsAnalyzing(false);
   };
 
+  // === UTILITY FUNCTIONS ===
+
+  // Clear all notes from history tracker
   const clearNoteHistory = () => {
     setNoteHistory([]);
   };
 
+  // Determine color coding for note history items
+  // Gray = wrong note (not in selection)
+  // Green = perfect (±10¢)
+  // Yellow = slightly off (±30¢)
+  // Red = very off (>30¢)
   const getNoteColorClass = (note: NoteHistoryItem) => {
     if (!note.isCorrect) {
-      return 'bg-gray-400';
+      return 'bg-gray-400'; // Wrong note (not in selection)
     }
 
     const absCents = Math.abs(note.cents);
     if (absCents <= 10) {
-      return 'bg-green-500';
+      return 'bg-green-500'; // Perfect pitch
     } else if (absCents <= 30) {
-      return 'bg-yellow-500';
+      return 'bg-yellow-500'; // Slightly off-tune
     } else {
-      return 'bg-red-500';
+      return 'bg-red-500'; // Very off-tune
     }
   };
 
+  // === CONTINUOUS PITCH DETECTION ENGINE ===
+  // This is the core function that runs continuously while analysis is active
+  // It detects pitch, tracks stability, and updates both real-time display and history
   const detectPitchContinuously = () => {
     if (!analyserRef.current || !audioContextRef.current) return;
 
     const bufferLength = analyserRef.current.fftSize;
     const buffer = new Float32Array(bufferLength);
-    let lastNoteTime = 0;
-    let lastDetectedSwara = '';
 
+    // === STABILITY TRACKING VARIABLES ===
+    // These persist across animation frames to track note consistency
+    let currentDetectedNote: string | null = null; // Currently tracked swara (e.g., 'S', 'R2')
+    let currentDetectedOctave: 'lower' | 'middle' | 'upper' | null = null; // Current octave
+    let currentStabilityCounter = 0; // How many consecutive times same note detected
+    const STABILITY_THRESHOLD = 4; // Must detect same note 4 times in a row (~0.4 seconds @ 100ms per frame)
+
+    // === MAIN DETECTION LOOP ===
+    // Runs continuously via requestAnimationFrame (~60fps, processes every ~100ms)
     const detectPitch = () => {
       if (!analyserRef.current || !audioContextRef.current) return;
 
+      // Get time-domain audio data from microphone
       analyserRef.current.getFloatTimeDomainData(buffer);
 
-      // Auto-correlation pitch detection
+      // === STEP 1: PITCH DETECTION ===
+      // Use auto-correlation algorithm to detect fundamental frequency
       const sampleRate = audioContextRef.current.sampleRate;
       const frequency = autoCorrelate(buffer, sampleRate);
 
       if (frequency && frequency > 0) {
+        // Valid frequency detected
+
+        // === STEP 2: FIND CLOSEST SWARA ===
+        // Match detected frequency to nearest swara across all octaves
         const match = findClosestSwara(frequency, frequencyData.allFrequencies);
 
         if (match) {
+          // Check if detected note is in user's selection
           const isCorrect = selectedNotes.size === 0 || selectedNotes.has(match.swara);
 
-          // Update real-time display (updates every frame ~100ms)
+          // === STEP 3: UPDATE REAL-TIME DISPLAY ===
+          // Always update immediately (provides instant visual feedback)
           setCurrentNote(match.swara);
           setCurrentNoteName(`${match.frequency.toFixed(1)} Hz`);
           setCurrentCents(match.cents);
           setCurrentIsCorrect(isCorrect);
 
-          // Add to history if held for 500ms (prevents rapid flickering in history)
-          const now = Date.now();
-          if (match.swara !== lastDetectedSwara || now - lastNoteTime > 500) {
-            setNoteHistory((prev) => {
-              const newNote: NoteHistoryItem = {
-                id: nextNoteId.current++,
-                swara: match.swara,
-                frequency: match.frequency,
-                timestamp: now,
-                octave: match.octave,
-                isCorrect,
-                cents: match.cents,
-              };
+          // === STEP 4: STABILITY TRACKING FOR HISTORY ===
+          // Only add to history if note is held steadily
+          const detectedSwara = match.swara;
+          const detectedOctave = match.octave;
 
-              // Keep last 100 notes
-              const updated = [...prev, newNote];
-              if (updated.length > 100) {
-                updated.shift();
-              }
+          if (detectedSwara === currentDetectedNote && detectedOctave === currentDetectedOctave) {
+            // Same note as before - increment stability counter
+            currentStabilityCounter++;
 
-              return updated;
-            });
+            // === STEP 5: ADD TO HISTORY WHEN STABLE ===
+            // After STABILITY_THRESHOLD consecutive detections, add to history
+            if (currentStabilityCounter === STABILITY_THRESHOLD) {
+              const now = Date.now();
+              setNoteHistory((prev) => {
+                const newNote: NoteHistoryItem = {
+                  id: nextNoteId.current++,
+                  swara: match.swara,
+                  frequency: match.frequency,
+                  timestamp: now,
+                  octave: match.octave,
+                  isCorrect,
+                  cents: match.cents,
+                };
 
-            lastDetectedSwara = match.swara;
-            lastNoteTime = now;
+                // Keep last 100 notes (prevent memory issues)
+                const updated = [...prev, newNote];
+                if (updated.length > 100) {
+                  updated.shift();
+                }
 
-            // Auto-scroll to latest note
-            setTimeout(() => {
-              if (noteTrackerRef.current) {
-                noteTrackerRef.current.scrollLeft = noteTrackerRef.current.scrollWidth;
-              }
-            }, 50);
+                return updated;
+              });
+
+              // Auto-scroll note tracker to show latest note
+              setTimeout(() => {
+                if (noteTrackerRef.current) {
+                  noteTrackerRef.current.scrollLeft = noteTrackerRef.current.scrollWidth;
+                }
+              }, 50);
+
+              // Reset counter after adding to history to allow continuous tracking
+              currentStabilityCounter = 0;
+            }
+          } else {
+            // Different note detected - reset stability tracking
+            currentDetectedNote = detectedSwara;
+            currentDetectedOctave = detectedOctave;
+            currentStabilityCounter = 1;
           }
         }
       } else {
-        // No clear pitch detected
+        // === NO PITCH DETECTED ===
+        // Reset display and stability tracking
         setCurrentNote('–');
         setCurrentNoteName('');
         setCurrentCents(0);
+        currentDetectedNote = null;
+        currentDetectedOctave = null;
+        currentStabilityCounter = 0;
       }
 
+      // Schedule next frame
       animationFrameRef.current = requestAnimationFrame(detectPitch);
     };
 
+    // Start the detection loop
     detectPitch();
   };
 
-  // Auto-correlation pitch detection algorithm
+  // === AUTO-CORRELATION PITCH DETECTION ALGORITHM ===
+  // Uses auto-correlation to find the fundamental frequency (pitch) from audio signal
+  // This is more accurate than FFT for musical pitch detection
   const autoCorrelate = (buffer: Float32Array, sampleRate: number): number | null => {
-    // Minimum volume threshold
+    // === STEP 1: VOLUME THRESHOLD CHECK ===
+    // Calculate RMS (Root Mean Square) to detect if there's sufficient audio signal
     let rms = 0;
     for (let i = 0; i < buffer.length; i++) {
       rms += buffer[i] * buffer[i];
     }
     rms = Math.sqrt(rms / buffer.length);
-    if (rms < 0.01) return null;
+    if (rms < 0.01) return null; // Too quiet - no pitch detected
 
-    // Find period using auto-correlation
+    // === STEP 2: FIND PERIOD USING AUTO-CORRELATION ===
+    // Auto-correlation finds repeating patterns in the waveform
+    // The period of repetition corresponds to the fundamental frequency
     let maxCorrelation = 0;
     let maxCorrelationIndex = -1;
     let lastCorrelation = 1;
 
+    // Test different offset values to find the best match
     for (let offset = 0; offset < buffer.length / 2; offset++) {
       let correlation = 0;
+
+      // Compare signal with itself at different time offsets
       for (let i = 0; i < buffer.length / 2; i++) {
         correlation += Math.abs(buffer[i] - buffer[i + offset]);
       }
+
+      // Normalize correlation (1 = perfect match, 0 = no match)
       correlation = 1 - correlation / (buffer.length / 2);
 
+      // Look for high correlation peaks (>0.9) after a dip
+      // This indicates we've found the period of the waveform
       if (correlation > 0.9 && correlation > lastCorrelation) {
         const foundGoodCorrelation = correlation > maxCorrelation;
         if (foundGoodCorrelation) {
@@ -375,9 +466,10 @@ function App() {
       lastCorrelation = correlation;
     }
 
-    if (maxCorrelationIndex === -1) return null;
+    if (maxCorrelationIndex === -1) return null; // No clear pitch found
 
-    // Return frequency
+    // === STEP 3: CONVERT PERIOD TO FREQUENCY ===
+    // Frequency = Sample Rate / Period (in samples)
     return sampleRate / maxCorrelationIndex;
   };
 
