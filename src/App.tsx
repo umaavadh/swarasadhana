@@ -147,6 +147,7 @@ function App() {
   const [selectedPreset, setSelectedPreset] = useState('None');
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(70);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const scales = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -154,6 +155,20 @@ function App() {
   const frequencyData = useMemo(() => {
     return calculateFrequencies(selectedScale);
   }, [selectedScale]);
+
+  const toggleAnalysis = async () => {
+    if (!isAnalyzing) {
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        setIsAnalyzing(true);
+      } catch (err) {
+        console.error('Microphone access denied:', err);
+        alert('Microphone access is required for vocal analysis. Please allow microphone access and try again.');
+      }
+    } else {
+      setIsAnalyzing(false);
+    }
+  };
 
   const toggleNote = (swara: string) => {
     const newSelected = new Set(selectedNotes);
@@ -677,6 +692,66 @@ function App() {
                 <span>Lower Octave</span>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Vocal Analysis Section */}
+      <section className="relative py-16">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-white rounded-2xl shadow-xl p-8 sm:p-10 border border-orange-100">
+            {/* Heading */}
+            <div className="text-center mb-10">
+              <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 mb-3">
+                Step 3: Analyze Your Vocals
+              </h2>
+              <p className="text-lg text-gray-600">
+                Sing along with the tanpura and watch your swaras appear in real-time
+              </p>
+            </div>
+
+            {/* Main Control Button */}
+            <div className="flex justify-center mb-8">
+              <button
+                onClick={toggleAnalysis}
+                className={`
+                  w-full sm:w-auto sm:min-w-[400px] h-16
+                  rounded-xl font-bold text-xl
+                  transition-all duration-300 transform hover:scale-105
+                  focus:outline-none focus:ring-4 focus:ring-offset-2
+                  shadow-lg hover:shadow-xl
+                  ${
+                    isAnalyzing
+                      ? 'bg-red-500 hover:bg-red-600 text-white focus:ring-red-300 animate-pulse-subtle'
+                      : 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white focus:ring-orange-300'
+                  }
+                `}
+              >
+                {isAnalyzing ? (
+                  <span className="flex items-center justify-center gap-3">
+                    <span className="relative flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
+                    </span>
+                    Stop Analysis
+                  </span>
+                ) : (
+                  <span className="flex items-center justify-center gap-3">
+                    <Mic className="w-6 h-6" />
+                    Start Live Vocal Analysis
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* Analysis Placeholder */}
+            {isAnalyzing && (
+              <div className="mt-8 p-6 bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl border-2 border-orange-200">
+                <p className="text-center text-gray-700 font-medium">
+                  Analysis active - Real-time pitch detection will be displayed here
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </section>
