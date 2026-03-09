@@ -146,6 +146,9 @@ interface NoteHistoryItem {
   swara: string;
   frequency: number;
   timestamp: number;
+  octave: 'lower' | 'middle' | 'upper';
+  isCorrect: boolean;
+  cents: number;
 }
 
 function App() {
@@ -234,6 +237,21 @@ function App() {
 
   const clearNoteHistory = () => {
     setNoteHistory([]);
+  };
+
+  const getNoteColorClass = (note: NoteHistoryItem) => {
+    if (!note.isCorrect) {
+      return 'bg-gray-400';
+    }
+
+    const absCents = Math.abs(note.cents);
+    if (absCents <= 10) {
+      return 'bg-green-500';
+    } else if (absCents <= 30) {
+      return 'bg-yellow-500';
+    } else {
+      return 'bg-red-500';
+    }
   };
 
   const detectPitchContinuously = () => {
@@ -874,20 +892,51 @@ function App() {
                     noteHistory.map((note) => (
                       <div
                         key={note.id}
-                        className="inline-flex flex-col items-center justify-center px-4 py-2 bg-gradient-to-br from-orange-500 to-amber-600 text-white rounded-lg shadow-md min-w-[60px] shrink-0 transform transition-transform hover:scale-105"
+                        className={`relative inline-flex flex-col items-center justify-center px-3.5 py-2 text-white rounded-xl shadow-md min-w-[50px] h-[50px] shrink-0 transform transition-all hover:-translate-y-0.5 hover:shadow-lg ${getNoteColorClass(note)}`}
                       >
-                        <span className="text-lg font-bold">{note.swara}</span>
-                        <span className="text-xs opacity-90">{note.frequency.toFixed(1)} Hz</span>
+                        {/* Octave indicator - dot above for upper octave */}
+                        {note.octave === 'upper' && (
+                          <div className="absolute top-1 w-1.5 h-1.5 bg-white rounded-full opacity-90"></div>
+                        )}
+
+                        {/* Octave indicator - dot below for lower octave */}
+                        {note.octave === 'lower' && (
+                          <div className="absolute bottom-1 w-1.5 h-1.5 bg-white rounded-full opacity-90"></div>
+                        )}
+
+                        <span className="text-xl font-bold leading-tight">{note.swara}</span>
                       </div>
                     ))
                   )}
                 </div>
 
-                <div className="mt-4 p-4 bg-gradient-to-br from-orange-50 to-amber-50 rounded-lg border border-orange-200">
-                  <p className="text-center text-gray-700 font-medium flex items-center justify-center gap-2">
-                    <Activity className="w-5 h-5 text-orange-600 animate-pulse" />
-                    Analysis active - Sing to detect your swaras
-                  </p>
+                {/* Color Legend and Status */}
+                <div className="mt-4 space-y-3">
+                  <div className="flex flex-wrap items-center justify-center gap-4 text-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 bg-green-500 rounded-lg"></div>
+                      <span className="text-gray-700 font-medium">Perfect (±10¢)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 bg-yellow-500 rounded-lg"></div>
+                      <span className="text-gray-700 font-medium">Close (±30¢)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 bg-red-500 rounded-lg"></div>
+                      <span className="text-gray-700 font-medium">Off-pitch (&gt;30¢)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 bg-gray-400 rounded-lg"></div>
+                      <span className="text-gray-700 font-medium">Not Selected</span>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-gradient-to-br from-orange-50 to-amber-50 rounded-lg border border-orange-200">
+                    <p className="text-center text-gray-700 font-medium flex items-center justify-center gap-2">
+                      <Activity className="w-5 h-5 text-orange-600 animate-pulse" />
+                      Analysis active - Sing to detect your swaras
+                    </p>
+                  </div>
                 </div>
               </div>
             )}
