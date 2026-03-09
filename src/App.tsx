@@ -1,5 +1,6 @@
 import { Music2, Mic, Target, Activity, Play, Square, Volume2, VolumeX } from 'lucide-react';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { calculateFrequencies, findClosestSwara, type SwaraFrequency, type ClosestSwaraMatch } from './pitchUtils';
 
 const MusicalNotesWave = () => {
   return (
@@ -149,6 +150,10 @@ function App() {
   const scales = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const frequencyData = useMemo(() => {
+    return calculateFrequencies(selectedScale);
+  }, [selectedScale]);
 
   const toggleNote = (swara: string) => {
     const newSelected = new Set(selectedNotes);
