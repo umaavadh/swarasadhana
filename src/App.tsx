@@ -1,6 +1,5 @@
-import { Music2, Mic, Target, Activity, Play, Square, Volume2, VolumeX } from 'lucide-react';
-import { useState, useRef, useEffect, useMemo } from 'react';
-import { calculateFrequencies, findClosestSwara, type SwaraFrequency, type ClosestSwaraMatch } from './pitchUtils';
+import { Music2, Play, Square, Volume2, VolumeX } from 'lucide-react';
+import { useState, useRef } from 'react';
 
 const MusicalNotesWave = () => {
   return (
@@ -156,21 +155,6 @@ const swaraNames: { [key: string]: string } = {
   "N2": "Shuddh Nishad"
 };
 
-interface NoteHistoryItem {
-  id: number;
-  swara: string;
-  frequency: number;
-  timestamp: number;
-  octave: 'lower' | 'middle' | 'upper';
-  isCorrect: boolean;
-  cents: number;
-  color: 'red' | 'green' | 'yellow' | 'gray';
-}
-
-// Helper function to get full swara name
-const getSwaraName = (swara: string): string => {
-  return swaraNames[swara] || swara;
-};
 
 function App() {
   // === GLOBAL STATE MANAGEMENT ===
@@ -185,366 +169,9 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(70);
 
-  // Step 3: Vocal Analysis State
-  const [isAnalyzing, setIsAnalyzing] = useState(false); // Analysis on/off
-  const [noteHistory, setNoteHistory] = useState<NoteHistoryItem[]>([]); // Continuous note tracker
-
-  // Real-time current note display (updates every ~100ms)
-  const [currentNote, setCurrentNote] = useState<string>('–'); // Current detected swara
-  const [currentNoteName, setCurrentNoteName] = useState<string>(''); // Frequency display
-  const [currentCents, setCurrentCents] = useState<number>(0); // Pitch deviation in cents
-  const [currentIsCorrect, setCurrentIsCorrect] = useState<boolean>(false); // Is note in selection
-  const [currentOctave, setCurrentOctave] = useState<'lower' | 'middle' | 'upper'>('middle'); // Current octave
-
-  // === REFS FOR AUDIO PROCESSING ===
-
   // Tanpura audio element
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Web Audio API components for pitch detection
-  const audioContextRef = useRef<AudioContext | null>(null); // Audio context
-  const analyserRef = useRef<AnalyserNode | null>(null); // FFT analyzer
-  const microphoneRef = useRef<MediaStreamAudioSourceNode | null>(null); // Mic input
-  const animationFrameRef = useRef<number | null>(null); // Animation loop ID
-  const streamRef = useRef<MediaStream | null>(null); // Media stream
-
-  // UI refs
-  const noteTrackerRef = useRef<HTMLDivElement | null>(null); // Note history scroll container
-  const nextNoteId = useRef(1); // Unique ID generator for note history
-
-  // === FREQUENCY CALCULATION ===
-  // Calculate all swara frequencies based on selected scale
-  // This recalculates whenever the scale changes (e.g., C to D)
-  const frequencyData = useMemo(() => {
-    return calculateFrequencies(selectedScale);
-  }, [selectedScale]);
-
-  // === START VOCAL ANALYSIS ===
-  // Initializes microphone input and Web Audio API for pitch detection
-  const startVocalAnalysis = async () => {
-    try {
-      // Request microphone access with optimal settings for vocal detection
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true, // Remove echo
-          noiseSuppression: true, // Reduce background noise
-          autoGainControl: false  // Keep consistent volume for accurate pitch
-        }
-      });
-
-      streamRef.current = stream;
-
-      // Create Web Audio API context (cross-browser compatible)
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      audioContextRef.current = new AudioContextClass();
-
-      // Create analyzer node for frequency analysis
-      analyserRef.current = audioContextRef.current.createAnalyser();
-      analyserRef.current.fftSize = 2048; // FFT size (higher = more frequency resolution)
-      analyserRef.current.smoothingTimeConstant = 0.8; // Smoothing for stability
-
-      // Connect microphone to analyzer
-      microphoneRef.current = audioContextRef.current.createMediaStreamSource(stream);
-      microphoneRef.current.connect(analyserRef.current);
-
-      setIsAnalyzing(true);
-
-      // Start continuous pitch detection loop
-      detectPitchContinuously();
-    } catch (error: any) {
-      console.error('Microphone access error:', error);
-
-      // User-friendly error messages
-      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-        alert('Microphone access denied. Please allow microphone permission in your browser settings and try again.');
-      } else if (error.name === 'NotFoundError') {
-        alert('No microphone found. Please connect a microphone and try again.');
-      } else {
-        alert('Error accessing microphone: ' + error.message);
-      }
-    }
-  };
-
-  // === STOP VOCAL ANALYSIS ===
-  // Cleanly shuts down all audio processing and resets state
-  const stopVocalAnalysis = () => {
-    // Stop animation loop
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-
-    // Disconnect audio nodes
-    if (microphoneRef.current) {
-      microphoneRef.current.disconnect();
-      microphoneRef.current = null;
-    }
-
-    // Stop microphone stream
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-
-    // Close audio context
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
-
-    // Reset real-time display to initial state
-    setCurrentNote('–');
-    setCurrentNoteName('');
-    setCurrentCents(0);
-    setCurrentIsCorrect(false);
-    setCurrentOctave('middle');
-
-    setIsAnalyzing(false);
-  };
-
-  // === UTILITY FUNCTIONS ===
-
-  // Clear all notes from history tracker
-  const clearNoteHistory = () => {
-    setNoteHistory([]);
-  };
-
-  // Get array of selected swaras from piano
-  const getSelectedSwaras = (): string[] => {
-    return Array.from(selectedNotes);
-  };
-
-  // Determine color coding for note history items based on stored color
-  // Red = wrong note (not selected)
-  // Green = perfect pitch (±15¢)
-  // Yellow = slightly off-tune (±35¢)
-  // Gray = very off-tune (>35¢)
-  const getNoteColorClass = (note: NoteHistoryItem) => {
-    switch (note.color) {
-      case 'red':
-        return 'bg-red-500'; // Wrong note (not selected)
-      case 'green':
-        return 'bg-green-500'; // Perfect pitch
-      case 'yellow':
-        return 'bg-yellow-500'; // Slightly off-tune
-      case 'gray':
-        return 'bg-gray-400'; // Very off-tune
-      default:
-        return 'bg-gray-400';
-    }
-  };
-
-  // === CONTINUOUS PITCH DETECTION LOOP ===
-  // Runs at 10 updates per second (100ms intervals)
-  // Detects pitch, validates frequency range (80-1500 Hz), tracks stability, and updates display
-  const detectPitchContinuously = () => {
-    if (!analyserRef.current || !audioContextRef.current) return;
-
-    const bufferLength = analyserRef.current.fftSize;
-    const buffer = new Float32Array(bufferLength);
-
-    // === STABILITY TRACKING VARIABLES ===
-    // These persist across animation frames to track note consistency
-    let currentDetectedNote: string | null = null; // Currently tracked swara (e.g., 'S', 'R2')
-    let currentDetectedOctave: 'lower' | 'middle' | 'upper' | null = null; // Current octave
-    let currentStabilityCounter = 0; // How many consecutive times same note detected
-    const STABILITY_THRESHOLD = 4; // Must detect same note 4 times in a row (~0.4 seconds @ 100ms per frame)
-
-    // === UPDATE PITCH FUNCTION ===
-    // Processes audio data and updates display
-    const updatePitch = () => {
-      if (!isAnalyzing || !analyserRef.current || !audioContextRef.current) return;
-
-      // Get audio data from microphone
-      analyserRef.current.getFloatTimeDomainData(buffer);
-
-      // Detect fundamental frequency
-      const sampleRate = audioContextRef.current.sampleRate;
-      const frequency = autoCorrelate(buffer, sampleRate);
-
-      if (frequency > 0 && frequency >= 80 && frequency <= 1500) {
-        // Valid vocal frequency detected (80-1500 Hz range)
-
-        const result = findClosestSwara(frequency, currentScale);
-
-        if (result) {
-          // Check if detected note is in user's selection
-          const isCorrect = selectedNotes.size === 0 || selectedNotes.has(result.swara);
-
-          // Update real-time display
-          setCurrentNote(result.swara);
-          setCurrentNoteName(`${result.frequency.toFixed(1)} Hz`);
-          setCurrentCents(result.cents);
-          setCurrentIsCorrect(isCorrect);
-          setCurrentOctave(result.octave);
-
-          // Check for note stability (for adding to history)
-          const detectedSwara = result.swara;
-          const detectedOctave = result.octave;
-
-          if (detectedSwara === currentDetectedNote && detectedOctave === currentDetectedOctave) {
-            // Same note as before - increment stability counter
-            currentStabilityCounter++;
-
-            // Add to history when stable
-            if (currentStabilityCounter === STABILITY_THRESHOLD) {
-              const now = Date.now();
-              setNoteHistory((prev) => {
-                // Check if this is a duplicate of the immediately previous note
-                const lastNote = prev[prev.length - 1];
-                if (lastNote && lastNote.swara === result.swara && lastNote.octave === result.octave) {
-                  // Same note being held - don't add duplicate
-                  return prev;
-                }
-
-                // Determine color based on accuracy and selection
-                const isSelected = selectedSwaras.includes(result.swara);
-                const absCents = Math.abs(result.cents);
-
-                let color: 'red' | 'green' | 'yellow' | 'gray';
-                if (!isSelected) {
-                  color = 'red'; // Wrong note (not selected)
-                } else if (absCents <= 15) {
-                  color = 'green'; // Perfect pitch
-                } else if (absCents <= 35) {
-                  color = 'yellow'; // Slightly off-tune
-                } else {
-                  color = 'gray'; // Very off-tune
-                }
-
-                // Create note object
-                const newNote: NoteHistoryItem = {
-                  id: nextNoteId.current++,
-                  swara: result.swara,
-                  frequency: result.frequency,
-                  timestamp: now,
-                  octave: result.octave,
-                  isCorrect,
-                  cents: result.cents,
-                  color,
-                };
-
-                // Keep last 100 notes (prevent memory issues)
-                const updated = [...prev, newNote];
-                if (updated.length > 100) {
-                  updated.shift();
-                }
-
-                return updated;
-              });
-
-              // Auto-scroll note tracker to show latest note
-              setTimeout(() => {
-                if (noteTrackerRef.current) {
-                  noteTrackerRef.current.scrollLeft = noteTrackerRef.current.scrollWidth;
-                }
-              }, 50);
-
-              // Reset counter after adding to history to allow continuous tracking
-              currentStabilityCounter = 0;
-            }
-          } else {
-            // Different note detected - reset stability tracking
-            currentDetectedNote = detectedSwara;
-            currentDetectedOctave = detectedOctave;
-            currentStabilityCounter = 1;
-          }
-        }
-      } else {
-        // No valid pitch detected - clear display
-        setCurrentNote('–');
-        setCurrentNoteName('');
-        setCurrentCents(0);
-        setCurrentIsCorrect(false);
-        setCurrentOctave('middle');
-
-        // Reset stability
-        currentDetectedNote = null;
-        currentDetectedOctave = null;
-        currentStabilityCounter = 0;
-      }
-
-      // Continue loop (10 updates per second)
-      animationFrameRef.current = requestAnimationFrame(() => {
-        setTimeout(updatePitch, 100);
-      });
-    };
-
-    // Start the detection loop
-    updatePitch();
-  };
-
-  // === AUTO-CORRELATION PITCH DETECTION ALGORITHM ===
-  // Uses auto-correlation to find the fundamental frequency (pitch) from audio signal
-  // This is more accurate than FFT for musical pitch detection
-  const autoCorrelate = (buffer: Float32Array, sampleRate: number): number | null => {
-    const SIZE = buffer.length;
-    const MAX_SAMPLES = Math.floor(SIZE / 2);
-    let bestOffset = -1;
-    let bestCorrelation = 0;
-
-    // === STEP 1: CALCULATE RMS TO DETECT IF THERE'S SOUND ===
-    let rms = 0;
-    for (let i = 0; i < SIZE; i++) {
-      const val = buffer[i];
-      rms += val * val;
-    }
-    rms = Math.sqrt(rms / SIZE);
-
-    // Silence threshold - ignore very quiet sounds
-    if (rms < 0.01) {
-      return -1; // No sound detected
-    }
-
-    // === STEP 2: FIND BEST AUTOCORRELATION OFFSET ===
-    let lastCorrelation = 1;
-
-    for (let offset = 0; offset < MAX_SAMPLES; offset++) {
-      let correlation = 0;
-
-      // Compare signal with itself at different time offsets
-      for (let i = 0; i < MAX_SAMPLES; i++) {
-        correlation += Math.abs(buffer[i] - buffer[i + offset]);
-      }
-
-      // Normalize correlation (1 = perfect match, 0 = no match)
-      correlation = 1 - (correlation / MAX_SAMPLES);
-
-      // Look for high correlation peaks (>0.9) after a dip
-      // This indicates we've found the period of the waveform
-      if (correlation > 0.9 && correlation > lastCorrelation) {
-        if (correlation > bestCorrelation) {
-          bestCorrelation = correlation;
-          bestOffset = offset;
-        }
-      }
-
-      lastCorrelation = correlation;
-    }
-
-    // === STEP 3: CALCULATE FREQUENCY IF GOOD CORRELATION FOUND ===
-    if (bestCorrelation > 0.01 && bestOffset > 0) {
-      return sampleRate / bestOffset;
-    }
-
-    return -1; // No pitch detected
-  };
-
-  useEffect(() => {
-    return () => {
-      if (isAnalyzing) {
-        stopVocalAnalysis();
-      }
-    };
-  }, []);
-
-  const toggleAnalysis = () => {
-    if (!isAnalyzing) {
-      startVocalAnalysis();
-    } else {
-      stopVocalAnalysis();
-    }
-  };
 
   const toggleNote = (swara: string) => {
     const newSelected = new Set(selectedNotes);
@@ -661,27 +288,15 @@ function App() {
               </p>
 
               {/* Feature Pills */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
-                <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow duration-300 border border-orange-200">
-                  <div className="flex items-start space-x-4">
-                    <div className="bg-gradient-to-br from-orange-500 to-amber-500 p-3 rounded-lg">
-                      <Target className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-800 mb-2">Select Your Scale</h3>
-                      <p className="text-sm text-gray-600">Choose your Sa position and set your reference pitch</p>
-                    </div>
-                  </div>
-                </div>
-
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left max-w-3xl mx-auto">
                 <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow duration-300 border border-orange-200">
                   <div className="flex items-start space-x-4">
                     <div className="bg-gradient-to-br from-orange-500 to-amber-500 p-3 rounded-lg">
                       <Music2 className="w-6 h-6 text-white" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-800 mb-2">Mark Your Swaras</h3>
-                      <p className="text-sm text-gray-600">Select specific notes you want to practice and perfect</p>
+                      <h3 className="font-semibold text-gray-800 mb-2">Select Your Scale</h3>
+                      <p className="text-sm text-gray-600">Choose your Sa position and mark your practice swaras</p>
                     </div>
                   </div>
                 </div>
@@ -689,23 +304,11 @@ function App() {
                 <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow duration-300 border border-orange-200">
                   <div className="flex items-start space-x-4">
                     <div className="bg-gradient-to-br from-orange-500 to-amber-500 p-3 rounded-lg">
-                      <Mic className="w-6 h-6 text-white" />
+                      <Play className="w-6 h-6 text-white" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-800 mb-2">Real-Time Analysis</h3>
-                      <p className="text-sm text-gray-600">Analyze your vocals instantly with precise pitch detection</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow duration-300 border border-orange-200">
-                  <div className="flex items-start space-x-4">
-                    <div className="bg-gradient-to-br from-orange-500 to-amber-500 p-3 rounded-lg">
-                      <Activity className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-800 mb-2">Visual Feedback</h3>
-                      <p className="text-sm text-gray-600">Perfect your pitch with intuitive visual indicators</p>
+                      <h3 className="font-semibold text-gray-800 mb-2">Tanpura Drone</h3>
+                      <p className="text-sm text-gray-600">Practice with an authentic tanpura accompaniment</p>
                     </div>
                   </div>
                 </div>
@@ -909,12 +512,6 @@ function App() {
                   <div className="relative h-full flex justify-center">
                     {noteMapping.map((note, idx) => {
                       const isSelected = selectedNotes.has(note.swara);
-                      const isCurrentNote = isAnalyzing && currentNote === note.swara && currentOctave === 'upper';
-                      const highlightClass = isCurrentNote
-                        ? isSelected
-                          ? 'shadow-[0_0_20px_rgba(34,197,94,0.8)] !-translate-y-0.5'
-                          : 'shadow-[0_0_20px_rgba(239,68,68,0.8)] !-translate-y-0.5'
-                        : '';
 
                       return note.isBlack ? (
                         <button
@@ -924,7 +521,7 @@ function App() {
                             isSelected
                               ? 'bg-gradient-to-b from-orange-600 to-orange-800 text-white'
                               : 'bg-gradient-to-b from-gray-700 to-gray-900 text-gray-200 hover:from-gray-600 hover:to-gray-800'
-                          } ${highlightClass}`}
+                          }`}
                           style={{
                             left: `${idx * 8.33}%`,
                             zIndex: 10,
@@ -943,7 +540,7 @@ function App() {
                             isSelected
                               ? 'bg-gradient-to-b from-orange-100 to-orange-300 border-orange-500 text-orange-900'
                               : 'bg-gradient-to-b from-white to-gray-50 border-gray-300 text-gray-700 hover:from-orange-50 hover:to-orange-100'
-                          } ${highlightClass}`}
+                          }`}
                           style={{ zIndex: 1 }}
                         >
                           <div className="flex flex-col items-center justify-end h-full pb-3">
@@ -966,12 +563,6 @@ function App() {
                   <div className="relative h-full flex justify-center">
                     {noteMapping.map((note, idx) => {
                       const isSelected = selectedNotes.has(note.swara);
-                      const isCurrentNote = isAnalyzing && currentNote === note.swara && currentOctave === 'middle';
-                      const highlightClass = isCurrentNote
-                        ? isSelected
-                          ? 'shadow-[0_0_20px_rgba(34,197,94,0.8)] !-translate-y-0.5'
-                          : 'shadow-[0_0_20px_rgba(239,68,68,0.8)] !-translate-y-0.5'
-                        : '';
 
                       return note.isBlack ? (
                         <button
@@ -981,7 +572,7 @@ function App() {
                             isSelected
                               ? 'bg-gradient-to-b from-orange-600 to-orange-800 text-white'
                               : 'bg-gradient-to-b from-gray-700 to-gray-900 text-gray-200 hover:from-gray-600 hover:to-gray-800'
-                          } ${highlightClass}`}
+                          }`}
                           style={{
                             left: `${idx * 8.33}%`,
                             zIndex: 10,
@@ -999,7 +590,7 @@ function App() {
                             isSelected
                               ? 'bg-gradient-to-b from-orange-100 to-orange-300 border-orange-500 text-orange-900'
                               : 'bg-gradient-to-b from-white to-gray-50 border-gray-300 text-gray-700 hover:from-orange-50 hover:to-orange-100'
-                          } ${highlightClass}`}
+                          }`}
                           style={{ zIndex: 1 }}
                         >
                           <div className="flex flex-col items-center justify-end h-full pb-3">
@@ -1021,12 +612,6 @@ function App() {
                   <div className="relative h-full flex justify-center">
                     {noteMapping.map((note, idx) => {
                       const isSelected = selectedNotes.has(note.swara);
-                      const isCurrentNote = isAnalyzing && currentNote === note.swara && currentOctave === 'lower';
-                      const highlightClass = isCurrentNote
-                        ? isSelected
-                          ? 'shadow-[0_0_20px_rgba(34,197,94,0.8)] !-translate-y-0.5'
-                          : 'shadow-[0_0_20px_rgba(239,68,68,0.8)] !-translate-y-0.5'
-                        : '';
 
                       return note.isBlack ? (
                         <button
@@ -1036,7 +621,7 @@ function App() {
                             isSelected
                               ? 'bg-gradient-to-b from-orange-600 to-orange-800 text-white'
                               : 'bg-gradient-to-b from-gray-700 to-gray-900 text-gray-200 hover:from-gray-600 hover:to-gray-800'
-                          } ${highlightClass}`}
+                          }`}
                           style={{
                             left: `${idx * 8.33}%`,
                             zIndex: 10,
@@ -1055,7 +640,7 @@ function App() {
                             isSelected
                               ? 'bg-gradient-to-b from-orange-100 to-orange-300 border-orange-500 text-orange-900'
                               : 'bg-gradient-to-b from-white to-gray-50 border-gray-300 text-gray-700 hover:from-orange-50 hover:to-orange-100'
-                          } ${highlightClass}`}
+                          }`}
                           style={{ zIndex: 1 }}
                         >
                           <div className="flex flex-col items-center justify-end h-full pb-3">
@@ -1093,191 +678,6 @@ function App() {
         </div>
       </section>
 
-      {/* Vocal Analysis Section */}
-      <section className="relative py-16">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="bg-white rounded-2xl shadow-xl p-8 sm:p-10 border border-orange-100">
-            {/* Heading */}
-            <div className="text-center mb-10">
-              <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 mb-3">
-                Step 3: Analyze Your Vocals
-              </h2>
-              <p className="text-lg text-gray-600">
-                Sing along with the tanpura and watch your swaras appear in real-time
-              </p>
-            </div>
-
-            {/* Main Control Button */}
-            <div className="flex justify-center mb-8">
-              <button
-                onClick={toggleAnalysis}
-                className={`
-                  w-full sm:w-auto sm:min-w-[400px] h-16
-                  rounded-xl font-bold text-xl
-                  transition-all duration-300 transform hover:scale-105
-                  focus:outline-none focus:ring-4 focus:ring-offset-2
-                  shadow-lg hover:shadow-xl
-                  ${
-                    isAnalyzing
-                      ? 'bg-red-500 hover:bg-red-600 text-white focus:ring-red-300 animate-pulse-subtle'
-                      : 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white focus:ring-orange-300'
-                  }
-                `}
-              >
-                {isAnalyzing ? (
-                  <span className="flex items-center justify-center gap-3">
-                    <span className="relative flex h-3 w-3">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
-                    </span>
-                    Stop Analysis
-                  </span>
-                ) : (
-                  <span className="flex items-center justify-center gap-3">
-                    <Mic className="w-6 h-6" />
-                    Start Live Vocal Analysis
-                  </span>
-                )}
-              </button>
-            </div>
-
-            {/* Real-Time Current Note Display */}
-            {isAnalyzing && (
-              <div className="mt-8 bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-                <div className="text-center">
-                  <div className="text-sm text-gray-600 mb-2 font-medium">Currently Singing:</div>
-                  <div className="relative inline-block text-6xl font-extrabold text-orange-600 leading-none my-3">
-                    {currentNote}
-                    {/* Octave indicator - dot above for upper octave */}
-                    {currentOctave === 'upper' && currentNote !== '–' && (
-                      <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 w-2.5 h-2.5 bg-orange-600 rounded-full"></div>
-                    )}
-                    {/* Octave indicator - dot below for lower octave */}
-                    {currentOctave === 'lower' && currentNote !== '–' && (
-                      <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2.5 h-2.5 bg-orange-600 rounded-full"></div>
-                    )}
-                  </div>
-                  <div className="text-lg text-gray-600 mb-6 min-h-[28px]">
-                    {currentNoteName && `(${getSwaraName(currentNote)}) • ${currentNoteName}`}
-                  </div>
-
-                  {/* Pitch Accuracy Meter */}
-                  <div className="mt-6">
-                    <div className="text-sm text-gray-600 mb-3 font-medium">Pitch Accuracy:</div>
-                    <div className="w-full max-w-md mx-auto">
-                      <div className="relative w-full h-10 rounded-full overflow-visible shadow-inner"
-                        style={{
-                          background: 'linear-gradient(to right, #ef4444 0%, #eab308 25%, #22c55e 45%, #22c55e 55%, #eab308 75%, #ef4444 100%)'
-                        }}
-                      >
-                        {/* Center line */}
-                        <div className="absolute left-1/2 top-0 w-0.5 h-full bg-gray-900 transform -translate-x-1/2 z-10"></div>
-
-                        {/* Moving indicator */}
-                        <div
-                          className="absolute top-1/2 w-2 h-12 bg-gray-900 rounded transform -translate-y-1/2 transition-all duration-100 ease-out shadow-lg z-20"
-                          style={{
-                            left: `${50 + (currentCents / 50) * 50}%`,
-                            transform: `translate(-50%, -50%)`
-                          }}
-                        ></div>
-                      </div>
-                    </div>
-                    <div
-                      className="mt-3 text-base font-semibold transition-colors duration-200"
-                      style={{
-                        color: Math.abs(currentCents) <= 10
-                          ? '#22c55e' // green for perfect
-                          : Math.abs(currentCents) <= 25
-                          ? '#eab308' // yellow for slightly off
-                          : '#ef4444' // red for very off
-                      }}
-                    >
-                      {currentCents > 0 ? '+' : ''}{currentCents.toFixed(0)}¢
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Note History Tracker */}
-            {isAnalyzing && (
-              <div className="mt-6 bg-white rounded-xl shadow-md p-6 border border-gray-200">
-                <h3 className="text-xl font-bold text-gray-800 mb-4">Your Practice Session:</h3>
-
-                <div
-                  ref={noteTrackerRef}
-                  className="w-full min-h-[90px] max-h-[90px] overflow-x-auto overflow-y-hidden whitespace-nowrap p-5 bg-gray-50 border-2 border-gray-200 rounded-xl flex items-center gap-1.5 scroll-smooth
-                    [&::-webkit-scrollbar]:h-2
-                    [&::-webkit-scrollbar-track]:bg-gray-100
-                    [&::-webkit-scrollbar-track]:rounded
-                    [&::-webkit-scrollbar-thumb]:bg-gray-300
-                    [&::-webkit-scrollbar-thumb]:rounded
-                    [&::-webkit-scrollbar-thumb:hover]:bg-gray-400"
-                >
-                  {noteHistory.length === 0 ? (
-                    <p className="text-gray-500 text-center w-full">
-                      Your sung notes will appear here...
-                    </p>
-                  ) : (
-                    noteHistory.map((note) => (
-                      <div
-                        key={note.id}
-                        className={`relative inline-flex flex-col items-center justify-center px-3.5 py-2 text-white rounded-xl shadow-md min-w-[50px] h-[50px] shrink-0 transform transition-all hover:-translate-y-0.5 hover:shadow-lg ${getNoteColorClass(note)}`}
-                      >
-                        {/* Octave indicator - dot above for upper octave */}
-                        {note.octave === 'upper' && (
-                          <div className="absolute top-1 w-1.5 h-1.5 bg-white rounded-full opacity-90"></div>
-                        )}
-
-                        {/* Octave indicator - dot below for lower octave */}
-                        {note.octave === 'lower' && (
-                          <div className="absolute bottom-1 w-1.5 h-1.5 bg-white rounded-full opacity-90"></div>
-                        )}
-
-                        <span className="text-xl font-bold leading-tight">{note.swara}</span>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                {/* Color Legend */}
-                <div className="mt-5 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                  <div className="font-semibold text-yellow-900 mb-3 text-sm">Color Guide:</div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <div className="flex items-center gap-2 text-sm text-yellow-900">
-                      <span className="w-6 h-6 bg-green-500 rounded flex-shrink-0"></span>
-                      <span>Perfect (correct note, accurate pitch)</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-yellow-900">
-                      <span className="w-6 h-6 bg-yellow-500 rounded flex-shrink-0"></span>
-                      <span>Slightly off-tune (correct note, needs adjustment)</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-yellow-900">
-                      <span className="w-6 h-6 bg-red-500 rounded flex-shrink-0"></span>
-                      <span>Wrong note (not in your selection)</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-yellow-900">
-                      <span className="w-6 h-6 bg-gray-400 rounded flex-shrink-0"></span>
-                      <span>Very off-tune (correct note, major adjustment needed)</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Clear History Button */}
-                <div className="mt-5 flex justify-center">
-                  <button
-                    onClick={clearNoteHistory}
-                    className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-400"
-                  >
-                    Clear History
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
     </div>
   );
 }
