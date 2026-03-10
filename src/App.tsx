@@ -365,7 +365,7 @@ function App() {
       if (frequency > 0 && frequency >= 80 && frequency <= 1500) {
         // Valid vocal frequency detected (80-1500 Hz range)
 
-        const result = findClosestSwara(frequency, currentScale);
+        const result = findClosestSwara(frequency, selectedScale);
 
         if (result) {
           // Check if detected note is in user's selection
@@ -398,7 +398,7 @@ function App() {
                 }
 
                 // Determine color based on accuracy and selection
-                const isSelected = selectedSwaras.includes(result.swara);
+                const isSelected = getSelectedSwaras().includes(result.swara);
                 const absCents = Math.abs(result.cents);
 
                 let color: 'red' | 'green' | 'yellow' | 'gray';
