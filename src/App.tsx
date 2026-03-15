@@ -398,7 +398,9 @@ function App() {
                 }
 
                 // Determine color based on accuracy and selection
-                const isSelected = getSelectedSwaras().includes(result.swara);
+                const selectedSwaras = getSelectedSwaras();
+                const hasSelection = selectedSwaras.length > 0;
+                const isSelected = !hasSelection || selectedSwaras.includes(result.swara);
                 const absCents = Math.abs(result.cents);
 
                 let color: 'red' | 'green' | 'yellow' | 'gray';
