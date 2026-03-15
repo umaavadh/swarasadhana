@@ -362,7 +362,7 @@ function App() {
       const sampleRate = audioContextRef.current.sampleRate;
       const frequency = autoCorrelate(buffer, sampleRate);
 
-      if (frequency > 0 && frequency >= 80 && frequency <= 1500) {
+      if (frequency !== null && frequency > 0 && frequency >= 80 && frequency <= 1500) {
         // Valid vocal frequency detected (80-1500 Hz range)
 
         const result = findClosestSwara(frequency, selectedScale);
